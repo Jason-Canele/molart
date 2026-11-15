@@ -48,7 +48,7 @@ try {
   const box = await page.locator('#view').boundingBox();
   const styles = await page.evaluate(() => window.molart.styles().map((s) => s.id));
   for (let i = 0; i < styles.length; i++) {
-    await page.locator('#view').click({ position: { x: 20, y: 20 } });
+    await page.locator('#view').click({ position: { x: 20, y: 20 }, force: true })   // focus only; on a slow software renderer the canvas never counts as 'stable';
     if (i < 10) await page.keyboard.press(i === 9 ? '0' : String(i + 1));
     else await page.locator(`[data-style="${styles[i]}"]`).click();
     const pressed = await page.locator(`[data-style="${styles[i]}"]`).getAttribute('aria-pressed');
