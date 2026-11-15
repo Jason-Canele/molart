@@ -66,6 +66,7 @@ npm run test:e2e     # browser tests (needs a build and Chromium)
 
 - molart was inspired by Sergey Ovchinnikov's protein structure visualization in
   [LocalFold](https://github.com/sokrypton/localfold).
+- The Scientific style follows Jane Richardson's hand-drawn ribbon diagrams (1981).
 - The Glass style is inspired by a protein rendering in a
   [LinkedIn post](https://www.linkedin.com/feed/update/urn:li:activity:7526936072279212032/) by Latent Labs.
 - The ASCII style is inspired by [ascii-fold](https://github.com/mitsenkov/ascii-fold) by
