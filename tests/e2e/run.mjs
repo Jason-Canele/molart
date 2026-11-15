@@ -344,6 +344,22 @@ try {
     await page.evaluate(() => window.molart.setStyle('normal'));
   }
 
+  // light: turning or colouring the key light changes the picture; resetting restores it exactly
+  {
+    const l = await page.evaluate(async () => {
+      const m = window.molart;
+      m.setStyle('normal');
+      const a = await m.exportPNGBase64(256, 256);
+      m.setLight(150, '#ffffff');
+      const turned = await m.exportPNGBase64(256, 256);
+      m.setLight(0, '#ffb060');
+      const tinted = await m.exportPNGBase64(256, 256);
+      m.setLight(null);
+      return { a, turned, tinted, back: await m.exportPNGBase64(256, 256), fp: m.info().fingerprint };
+    });
+    check('key light can be turned and coloured, and reset restores the picture', l.turned !== l.a && l.tinted !== l.a && l.tinted !== l.turned && l.back === l.a);
+  }
+
   // memory: clicking through every style in both modes must not pile up meshes
   const mem = await page.evaluate(async () => {
     const m = window.molart;

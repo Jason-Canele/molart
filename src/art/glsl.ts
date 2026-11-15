@@ -40,7 +40,9 @@ struct Surface {
   vec2 canvas;    // protein-anchored 2D canvas coordinate (Å) on the principal plane
   vec4 face;      // face anchor of this helix/strand: (centre arc Å, side x radius Å (0 = none), up code, kind + random: 0 loop, 1.x helix, 2.x strand); constant per triangle
 };
-const vec3 KEY = vec3(-0.42, 0.62, 0.66);
+uniform vec3 uKey;   // key light direction in view space (default (-0.42, 0.62, 0.66); the user may turn it)
+uniform vec3 uSun;   // key light colour, linear rgb (white = no tint)
+#define KEY uKey
 float lambert(vec3 n){ return max(dot(n, normalize(KEY)), 0.0); }
 float halfLambert(vec3 n){ return dot(n, normalize(KEY)) * 0.5 + 0.5; }
 float blinn(vec3 n, vec3 v, float p){ return pow(max(dot(n, normalize(normalize(KEY) + v)), 0.0), p); }

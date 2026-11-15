@@ -105,6 +105,8 @@ void main(){
   // canvas coordinates: object position projected on the protein's principal plane (Å), anchored to the protein
   s.canvas = vec2(dot(vObjPos - uFrameC, uFrameX), dot(vObjPos - uFrameC, uFrameY));
   vec3 c = shadeSurface(s);
+  // coloured key light: faces turned to the light take its colour, faces turned away keep their own
+  c *= mix(vec3(1.0), uSun, sstep(-0.3, 0.8, dot(n, normalize(uKey))));
   gColor = vec4(max(c, vec3(0.0)), 1.0 + s.ss);
   gSurf = vec4(s.t, s.across, s.faceY, -vViewPos.z);
   gNormal = vec4(n, mod(mix(s.facet, gCreaseId, step(0.0, gCreaseId)), 2048.0)); // half-float safe id for crease detection

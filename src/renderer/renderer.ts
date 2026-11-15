@@ -38,6 +38,8 @@ export interface RenderParams {
   artBlend?: number;
   /** Text styles (ASCII Fold): share of the picture drawn as text, 0 (all ribbon) .. 1 (all text); null = the style's default blend. */
   ascii?: number | null;
+  /** Key light ("sun"): turned by `angle` degrees about the viewing direction from its default (upper left), with an sRGB colour. null = default white light. */
+  light?: { angle: number; color: [number, number, number] } | null;
 }
 
 /** Deterministic 32-bit hash of a string → float seed in [0, 1000). */
@@ -498,7 +500,7 @@ export class MolartRenderer {
         glslVersion: THREE.GLSL3,
         vertexShader: GBUFFER_VERT,
         fragmentShader: gbufferFrag(style.surfaceGLSL),
-        uniforms: { tChainGroup: { value: this.chainTex }, uGroup: { value: -1 }, uSeed: { value: 0 }, uColA: { value: new THREE.Vector3(1, 1, 1) }, uColB: { value: new THREE.Vector3(1, 1, 1) }, uObjKey: { value: new THREE.Vector3(0, 1, 0) }, uFrameX: { value: new THREE.Vector3(1, 0, 0) }, uFrameY: { value: new THREE.Vector3(0, 1, 0) }, uFrameC: { value: new THREE.Vector3() } },
+        uniforms: { tChainGroup: { value: this.chainTex }, uGroup: { value: -1 }, uSeed: { value: 0 }, uColA: { value: new THREE.Vector3(1, 1, 1) }, uColB: { value: new THREE.Vector3(1, 1, 1) }, uObjKey: { value: new THREE.Vector3(0, 1, 0) }, uKey: { value: new THREE.Vector3(-0.42, 0.62, 0.66) }, uSun: { value: new THREE.Vector3(1, 1, 1) }, uFrameX: { value: new THREE.Vector3(1, 0, 0) }, uFrameY: { value: new THREE.Vector3(0, 1, 0) }, uFrameC: { value: new THREE.Vector3() } },
         side: THREE.DoubleSide,
       });
       this.matCache.set(style.id + variant, m);
@@ -513,7 +515,7 @@ export class MolartRenderer {
         glslVersion: THREE.GLSL3,
         vertexShader: GBUFFER_VERT,
         fragmentShader: gbufferFrag(style.surfaceGLSL, true),
-        uniforms: { tChainGroup: { value: this.chainTex }, uGroup: { value: -1 }, uSeed: { value: 0 }, uColA: { value: new THREE.Vector3(1, 1, 1) }, uColB: { value: new THREE.Vector3(1, 1, 1) }, uObjKey: { value: new THREE.Vector3() }, uFrameX: { value: new THREE.Vector3() }, uFrameY: { value: new THREE.Vector3() }, uFrameC: { value: new THREE.Vector3() }, tPrev: { value: null }, uRes: { value: new THREE.Vector2() } },
+        uniforms: { tChainGroup: { value: this.chainTex }, uGroup: { value: -1 }, uSeed: { value: 0 }, uColA: { value: new THREE.Vector3(1, 1, 1) }, uColB: { value: new THREE.Vector3(1, 1, 1) }, uObjKey: { value: new THREE.Vector3() }, uKey: { value: new THREE.Vector3(-0.42, 0.62, 0.66) }, uSun: { value: new THREE.Vector3(1, 1, 1) }, uFrameX: { value: new THREE.Vector3() }, uFrameY: { value: new THREE.Vector3() }, uFrameC: { value: new THREE.Vector3() }, tPrev: { value: null }, uRes: { value: new THREE.Vector2() } },
         side: THREE.DoubleSide,
       });
       this.peelCache.set(style.id, m);
@@ -523,6 +525,8 @@ export class MolartRenderer {
     m.uniforms.uColA.value.copy(front.uniforms.uColA.value);
     m.uniforms.uColB.value.copy(front.uniforms.uColB.value);
     m.uniforms.uObjKey.value.copy(front.uniforms.uObjKey.value);
+    m.uniforms.uKey.value.copy(front.uniforms.uKey.value);
+    m.uniforms.uSun.value.copy(front.uniforms.uSun.value);
     for (const k of ['uFrameX', 'uFrameY', 'uFrameC']) m.uniforms[k].value.copy(front.uniforms[k].value);
     return m;
   }
@@ -592,7 +596,10 @@ export class MolartRenderer {
     const cols = this.styleColors();
     // key light expressed in model space at the default view: "painted-on" lighting for styles that want it
     const [ax, ay, az] = this.frame!.axes;
-    const k = [-0.42, 0.62, 0.66];
+    // the key light may be turned about the viewing direction and given a colour (display only)
+    const la = ((this.params.light?.angle ?? 0) * Math.PI) / 180, lc = Math.cos(la), ls = Math.sin(la);
+    const k = [-0.42 * lc - 0.62 * ls, -0.42 * ls + 0.62 * lc, 0.66];
+    const sun = (this.params.light?.color ?? [1, 1, 1]).map((v) => Math.pow(v, 2.2));
     groups.forEach((g, gi) => {
       for (const c of g.chains) if (c < tex.length) tex[c] = gi;
       const geom = (g.art && blend !== undefined && blend < 1 ? this.blendFor(g.style, Math.max(0, blend)) : null) ?? this.geometryFor(g.style, g.art);
@@ -604,6 +611,8 @@ export class MolartRenderer {
         mat.uniforms.uColB.value.set(...cols[1]);
       }
       mat.uniforms.uObjKey.value.set(ax[0] * k[0] + ay[0] * k[1] + az[0] * k[2], ax[1] * k[0] + ay[1] * k[1] + az[1] * k[2], ax[2] * k[0] + ay[2] * k[1] + az[2] * k[2]);
+      mat.uniforms.uKey.value.set(k[0], k[1], k[2]);
+      mat.uniforms.uSun.value.set(sun[0], sun[1], sun[2]);
       mat.uniforms.uFrameX.value.set(ax[0], ax[1], ax[2]);
       mat.uniforms.uFrameY.value.set(ay[0], ay[1], ay[2]);
       mat.uniforms.uFrameC.value.set(...this.frame!.centre);

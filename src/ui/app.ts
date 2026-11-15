@@ -29,6 +29,8 @@ interface Settings {
   artMode?: boolean;
   /** ASCII Fold: share of the picture drawn as text (0..1). */
   asciiAmount?: number;
+  /** key light: degrees turned from the default direction, and its colour (hex) */
+  light?: { angle: number; color: string };
 }
 
 type RGB = [number, number, number];
@@ -147,7 +149,7 @@ export class App {
     root.append(main, ui.dock, ui.scrim, ui.drawer);
     this.r = new MolartRenderer(canvas);
     this.r.style = getStyle(this.settings.style);
-    this.r.params = { seed: this.settings.seed, deform: this.settings.deform };
+    this.r.params = { seed: this.settings.seed, deform: this.settings.deform, light: this.lightParam() };
     this.r.controls.addEventListener('change', () => this.scheduleCameraSave());
     this.bindDrop(main);
     this.bindKeys(canvas);
@@ -271,6 +273,15 @@ export class App {
     els.error = h('div', { class: 'error' });
     els.sampleSel = sampleSel;
 
+    // light: where the key light comes from and its colour
+    const lightAngle = h('input', { id: 'lightAngle', type: 'range', min: '0', max: '360', step: '5', value: String(this.settings.light?.angle ?? 0), 'aria-label': 'Light direction' }) as HTMLInputElement;
+    const lightColor = h('input', { id: 'lightColor', type: 'color', value: this.settings.light?.color ?? '#ffffff', 'aria-label': 'Light colour', title: 'Light colour' }) as HTMLInputElement;
+    const lightReset = h('button', { class: 'quiet' }, 'Reset');
+    lightAngle.addEventListener('input', () => this.setLight(parseFloat(lightAngle.value), lightColor.value));
+    lightColor.addEventListener('input', () => this.setLight(parseFloat(lightAngle.value), lightColor.value));
+    lightReset.addEventListener('click', () => this.setLight(null));
+    els.lightAngle = lightAngle;
+    els.lightColor = lightColor;
     els.name = h('span', { class: 'name' });
     // a quiet invitation beside the sample's name; it goes away once the user's own structure is shown
     const touch = typeof matchMedia === 'function' && matchMedia('(hover: none)').matches;
@@ -287,6 +298,7 @@ export class App {
       h('header', {}, h('h1', {}, 'molart'), closeBtn),
       h('section', {}, h('h2', {}, 'Structure'), h('div', { class: 'row' }, openBtn, file, sampleSel), h('div', { class: 'row' }, pdbId, fetchBtn)),
       h('section', {}, h('h2', {}, 'Picture'), h('div', { class: 'row' }, h('label', {}, 'Seed ', seed), size), h('div', { class: 'row' }, resetBtn, camBtn, galleryBtn)),
+      h('section', {}, h('h2', {}, 'Light'), h('div', { class: 'row' }, lightAngle, lightColor, lightReset)),
       h('section', {}, h('h2', {}, 'Style'), technique),
       h('section', {}, h('h2', {}, 'About'), els.info, h('p', { class: 'technique' }, 'Drag to rotate, scroll to zoom, right-drag to pan. R resets the view; keys 1–9 and 0 switch styles.')),
     );
@@ -608,6 +620,22 @@ export class App {
     this.settings.asciiAmount = Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0.5));
     this.r.setParams({ ascii: this.settings.asciiAmount });
     this.refreshStyleUI();
+    this.saveSettings();
+  }
+
+  private lightParam() {
+    const l = this.settings.light;
+    const c = l && hexToRgb(l.color);
+    return l && c ? { angle: l.angle, color: c } : null;
+  }
+
+  /** Key light: degrees turned from the default direction and a hex colour; null restores the default white light. */
+  setLight(angle: number | null, color = '#ffffff') {
+    if (angle === null || (angle % 360 === 0 && color.toLowerCase() === '#ffffff')) delete this.settings.light;
+    else this.settings.light = { angle: ((angle % 360) + 360) % 360, color };
+    (this.els.lightAngle as HTMLInputElement).value = String(this.settings.light?.angle ?? 0);
+    (this.els.lightColor as HTMLInputElement).value = this.settings.light?.color ?? '#ffffff';
+    this.r.setParams({ light: this.lightParam() });
     this.saveSettings();
   }
 

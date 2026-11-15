@@ -24,6 +24,7 @@ const api = {
   },
   setStyle: (id: string) => app.setStyle(getStyle(id).id),
   setSeed: (seed: number) => app.setSeed(seed),
+  setLight: (angle: number | null, color?: string) => app.setLight(angle, color),
   // scripted use: one explicit amount for every deformable style (the UI keeps one slider per style)
   setDeform: (v: number) => app.setDeform(v, true),
   /** Two sRGB hex colours for styles with a colour choice (Glass); null restores the defaults. */
