@@ -56,6 +56,8 @@ input[type='checkbox'] { accent-color: var(--ink); padding: 0; }
 .top > * { pointer-events: auto; }
 .brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .brand .name { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brand .hint { font-size: 13px; padding: 0; margin-left: -5px; white-space: nowrap; flex: none; }
+@media (max-width: 380px) { .brand .hint { display: none; } }
 .error {
   position: absolute; top: calc(58px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%);
   width: max-content; max-width: min(560px, calc(100% - 32px));

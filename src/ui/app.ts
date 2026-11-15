@@ -81,6 +81,8 @@ export class App {
   r: MolartRenderer;
   structure: Structure | null = null;
   fileName = '';
+  /** true while a bundled sample is shown: the top bar then invites the user to bring their own file */
+  isSample = false;
   settings: Settings;
   private els: Record<string, HTMLElement> = {};
   private camSaveTimer = 0;
@@ -190,7 +192,7 @@ export class App {
     const deform = h('input', { id: 'deformRange', type: 'range', min: '0', max: '1', step: '0.05', value: String(this.settings.deform), 'aria-label': 'Artistic deformation amount' }) as HTMLInputElement;
     deform.addEventListener('change', () => this.setDeform(parseFloat(deform.value)));
     const deformBox = h('section', { class: 'ctl hidden' }, h('label', { id: 'deformTitle', for: 'deformRange' }, 'Melt'), deform);
-    const deformWarn = h('span', { class: 'warn hidden', id: 'deformWarn', title: 'Artistic deformation: the drawn mesh is reshaped. Not a physical conformation; atomic coordinates are unchanged.' }, 'Reshaped, not a real conformation');
+    const deformWarn = h('span', { class: 'warn hidden', id: 'deformWarn', title: 'Artistic deformation: the drawn mesh is reshaped. Not a physical conformation; atomic coordinates are unchanged.' }, 'Shape altered for art');
 
     // colour choice (styles with selectable colours, e.g. Glass)
     const mkColor = (label: string) => h('input', { type: 'color', 'aria-label': label, title: label }) as HTMLInputElement;
@@ -227,7 +229,7 @@ export class App {
     modeSci.addEventListener('click', () => this.chooseMode(false));
     modeArt.addEventListener('click', () => this.chooseMode(true));
     const artBox = h('div', { class: 'mode', role: 'group', 'aria-label': 'Mode' }, modeSci, modeArt, art);
-    const artWarn = h('span', { class: 'warn hidden', id: 'artWarn', title: 'Art mode: shapes are an interpretation and no longer follow the true backbone. Atomic coordinates are unchanged.' }, 'Interpretation, not the true backbone');
+    const artWarn = h('span', { class: 'warn hidden', id: 'artWarn', title: 'Art mode: shapes are an interpretation and no longer follow the true backbone. Atomic coordinates are unchanged.' }, 'Shape altered for art');
     Object.assign(els, { facesBox, faces, asciiBox, ascii, asciiOut, artBox, art, modeSci, modeArt });
     // per-chain styles (shown for structures with more than one chain)
     // what the style row applies to: everything, or one chain (shown for structures with more than one chain)
@@ -270,6 +272,10 @@ export class App {
     els.sampleSel = sampleSel;
 
     els.name = h('span', { class: 'name' });
+    // a quiet invitation beside the sample's name; it goes away once the user's own structure is shown
+    const touch = typeof matchMedia === 'function' && matchMedia('(hover: none)').matches;
+    els.hint = h('button', { class: 'quiet hint hidden', id: 'ownHint', title: 'Open a .pdb, .cif or .mmcif file. It stays in your browser.' }, touch ? 'or open your own file' : 'or drop your own file');
+    els.hint.addEventListener('click', () => file.click());
     const openBtn = h('button', {}, 'Open file…');
     openBtn.addEventListener('click', () => file.click());
     const moreBtn = h('button', { id: 'moreBtn', class: 'round', 'aria-label': 'More', 'aria-expanded': 'false', title: 'More' }, '···');
@@ -294,7 +300,7 @@ export class App {
     closeBtn.addEventListener('click', () => setDrawer(false));
     scrim.addEventListener('click', () => setDrawer(false));
     window.addEventListener('keydown', (e) => e.key === 'Escape' && setDrawer(false));
-    const top = h('div', { class: 'top' }, h('div', { class: 'brand' }, h('h1', {}, 'molart'), els.name), h('div', { class: 'row' }, moreBtn, exportBtn));
+    const top = h('div', { class: 'top' }, h('div', { class: 'brand' }, h('h1', {}, 'molart'), els.name, els.hint), h('div', { class: 'row' }, moreBtn, exportBtn));
     const dock = h(
       'footer',
       { class: 'dock' },
@@ -520,6 +526,8 @@ export class App {
     const res = await fetch(`samples/${id}.cif`);
     if (!res.ok) return this.showError(`Sample ${id} not found.`);
     await this.loadText(await res.text(), `${id}.cif`);
+    this.isSample = true;
+    this.els.hint.classList.remove('hidden');
   }
 
   async fetchPdb(raw: string) {
@@ -539,6 +547,8 @@ export class App {
       const s = loadStructure(text, name.replace(/ \(.*\)$/, ''));
       this.structure = s;
       this.fileName = name;
+      this.isSample = false;
+      this.els.hint.classList.add('hidden');
       this.guard();
       this.showError('');
       this.r.setStructure(s);
