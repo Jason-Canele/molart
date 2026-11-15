@@ -55,7 +55,7 @@ npm run test:e2e     # browser tests (needs a build and Chromium)
 
 - [three.js](https://threejs.org) (MIT) for WebGL rendering.
 - The ASCII style is inspired by [ascii-fold](https://github.com/mitsenkov/ascii-fold) by
-  Maxim Tsenkov (MIT). No code was copied.
+  Maxim Tsenkov (MIT).
 - Sample structures in `public/samples/` (1TIM, 3CHY, 1UBQ, 4HHB) are unmodified downloads from
   the [RCSB PDB](https://www.rcsb.org) (CC0 1.0).
 
