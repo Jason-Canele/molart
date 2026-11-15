@@ -38,7 +38,7 @@ export interface RenderParams {
   artBlend?: number;
   /** Text styles (ASCII Fold): share of the picture drawn as text, 0 (all ribbon) .. 1 (all text); null = the style's default blend. */
   ascii?: number | null;
-  /** Key light ("sun"): turned by `angle` degrees about the viewing direction from its default (upper left), with an sRGB colour. null = default white light. */
+  /** Sun: a low key light that casts shadows, turned by `angle` degrees about the viewing direction from upper left, with an sRGB colour. null = off (each style's own even light). */
   light?: { angle: number; color: [number, number, number] } | null;
 }
 
@@ -89,6 +89,11 @@ export class MolartRenderer {
   private chainTex = new THREE.DataTexture(new Uint8Array(1024), 1024, 1, THREE.RedFormat, THREE.UnsignedByteType);
   private geomCache = new Map<string, THREE.BufferGeometry>();
   private matCache = new Map<string, THREE.RawShaderMaterial>();
+  /** sun (cast shadows): uniforms shared by every surface material, a depth picture from the light, its camera */
+  private sunU = { tShadow: { value: null as THREE.Texture | null }, uShadowMat: { value: new THREE.Matrix4() }, uShadowOn: { value: 0 }, uShadowTexel: { value: 1 / 2048 } };
+  private sunDir = new THREE.Vector3(-0.42, 0.62, 0.66).normalize();   // towards the light, view space
+  private sunCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
+  private sunTarget: THREE.WebGLRenderTarget | null = null;
   private gbuf: THREE.WebGLRenderTarget | null = null;
   private peelCache = new Map<string, THREE.RawShaderMaterial>();
   private dummyTex = new THREE.DataTexture(new Uint8Array(4), 1, 1);
@@ -153,6 +158,8 @@ export class MolartRenderer {
         tPeel2Surf: { value: null },
         tPeel2Normal: { value: null },
         uGlass: { value: 0 },
+        uRig: { value: new THREE.Vector2(1, 0) },
+        uRigCol: { value: new THREE.Vector3(1, 1, 1) },
         uWax: { value: new THREE.Vector2() },
         uWaxLayers: { value: 0 },
         uWaxCore: { value: 0 },
@@ -500,7 +507,7 @@ export class MolartRenderer {
         glslVersion: THREE.GLSL3,
         vertexShader: GBUFFER_VERT,
         fragmentShader: gbufferFrag(style.surfaceGLSL),
-        uniforms: { tChainGroup: { value: this.chainTex }, uGroup: { value: -1 }, uSeed: { value: 0 }, uColA: { value: new THREE.Vector3(1, 1, 1) }, uColB: { value: new THREE.Vector3(1, 1, 1) }, uObjKey: { value: new THREE.Vector3(0, 1, 0) }, uKey: { value: new THREE.Vector3(-0.42, 0.62, 0.66) }, uSun: { value: new THREE.Vector3(1, 1, 1) }, uFrameX: { value: new THREE.Vector3(1, 0, 0) }, uFrameY: { value: new THREE.Vector3(0, 1, 0) }, uFrameC: { value: new THREE.Vector3() } },
+        uniforms: { tChainGroup: { value: this.chainTex }, uGroup: { value: -1 }, uSeed: { value: 0 }, uColA: { value: new THREE.Vector3(1, 1, 1) }, uColB: { value: new THREE.Vector3(1, 1, 1) }, uObjKey: { value: new THREE.Vector3(0, 1, 0) }, uKey: { value: new THREE.Vector3(-0.42, 0.62, 0.66) }, uSun: { value: new THREE.Vector3(1, 1, 1) }, uSunAmt: { value: style.glass ? 0.3 : 1 }, ...this.sunU, uFrameX: { value: new THREE.Vector3(1, 0, 0) }, uFrameY: { value: new THREE.Vector3(0, 1, 0) }, uFrameC: { value: new THREE.Vector3() } },
         side: THREE.DoubleSide,
       });
       this.matCache.set(style.id + variant, m);
@@ -515,7 +522,7 @@ export class MolartRenderer {
         glslVersion: THREE.GLSL3,
         vertexShader: GBUFFER_VERT,
         fragmentShader: gbufferFrag(style.surfaceGLSL, true),
-        uniforms: { tChainGroup: { value: this.chainTex }, uGroup: { value: -1 }, uSeed: { value: 0 }, uColA: { value: new THREE.Vector3(1, 1, 1) }, uColB: { value: new THREE.Vector3(1, 1, 1) }, uObjKey: { value: new THREE.Vector3() }, uKey: { value: new THREE.Vector3(-0.42, 0.62, 0.66) }, uSun: { value: new THREE.Vector3(1, 1, 1) }, uFrameX: { value: new THREE.Vector3() }, uFrameY: { value: new THREE.Vector3() }, uFrameC: { value: new THREE.Vector3() }, tPrev: { value: null }, uRes: { value: new THREE.Vector2() } },
+        uniforms: { tChainGroup: { value: this.chainTex }, uGroup: { value: -1 }, uSeed: { value: 0 }, uColA: { value: new THREE.Vector3(1, 1, 1) }, uColB: { value: new THREE.Vector3(1, 1, 1) }, uObjKey: { value: new THREE.Vector3() }, uKey: { value: new THREE.Vector3(-0.42, 0.62, 0.66) }, uSun: { value: new THREE.Vector3(1, 1, 1) }, uSunAmt: { value: style.glass ? 0.3 : 1 }, ...this.sunU, uFrameX: { value: new THREE.Vector3() }, uFrameY: { value: new THREE.Vector3() }, uFrameC: { value: new THREE.Vector3() }, tPrev: { value: null }, uRes: { value: new THREE.Vector2() } },
         side: THREE.DoubleSide,
       });
       this.peelCache.set(style.id, m);
@@ -598,7 +605,10 @@ export class MolartRenderer {
     const [ax, ay, az] = this.frame!.axes;
     // the key light may be turned about the viewing direction and given a colour (display only)
     const la = ((this.params.light?.angle ?? 0) * Math.PI) / 180, lc = Math.cos(la), ls = Math.sin(la);
-    const k = [-0.42 * lc - 0.62 * ls, -0.42 * ls + 0.62 * lc, 0.66];
+    // with the sun on the light stands lower, so that shadows fall across the picture
+    const kz = this.params.light ? 0.3 : 0.66;
+    const k = [-0.42 * lc - 0.62 * ls, -0.42 * ls + 0.62 * lc, kz];
+    this.sunDir.set(k[0], k[1], k[2]).normalize();
     const sun = (this.params.light?.color ?? [1, 1, 1]).map((v) => Math.pow(v, 2.2));
     groups.forEach((g, gi) => {
       for (const c of g.chains) if (c < tex.length) tex[c] = gi;
@@ -702,6 +712,37 @@ export class MolartRenderer {
       r.setClearColor(0xffffff, 1);
       r.clear(true, false, false);
     }
+    // sun: a depth picture of the whole protein from the light, read by every surface shader for cast shadows
+    this.sunU.uShadowOn.value = 0;
+    if (this.params.light) {
+      if (!this.sunTarget) {
+        this.sunTarget = new THREE.WebGLRenderTarget(2048, 2048, { type: THREE.UnsignedByteType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
+        this.sunTarget.depthTexture = new THREE.DepthTexture(2048, 2048, THREE.UnsignedIntType);
+      }
+      const centre = new THREE.Vector3(...this.frame!.centre);
+      let radius = 1;
+      for (const l of this.layers) {
+        const g = l.mesh.geometry;
+        if (!g.boundingSphere) g.computeBoundingSphere();
+        radius = Math.max(radius, g.boundingSphere!.center.distanceTo(centre) + g.boundingSphere!.radius);
+      }
+      cam.updateMatrixWorld();
+      const dir = this.sunDir.clone().transformDirection(cam.matrixWorld);
+      const sc = this.sunCam;
+      sc.left = sc.bottom = -radius; sc.right = sc.top = radius; sc.near = 0.1; sc.far = 4 * radius;
+      sc.position.copy(centre).addScaledVector(dir, 2 * radius);
+      sc.up.copy(cam.up);
+      sc.lookAt(centre);
+      sc.updateProjectionMatrix(); sc.updateMatrixWorld();
+      this.layers.forEach((l) => { l.mesh.visible = true; l.mesh.material = l.depth; });
+      r.setRenderTarget(this.sunTarget);
+      r.setClearColor(0x000000, 0);
+      r.clear(true, true, true);
+      r.render(this.scene, sc);
+      this.sunU.tShadow.value = this.sunTarget.depthTexture;
+      this.sunU.uShadowMat.value.multiplyMatrices(sc.projectionMatrix, sc.matrixWorldInverse);
+      this.sunU.uShadowOn.value = 1;
+    }
     // a layer hides what is behind it unless it is see-through
     const occludes = (st: ArtStyle) => !st.glass && !(st.translucency && st.translucency > 0);
     for (let li = 0; li < this.layers.length; li++) {
@@ -773,6 +814,9 @@ export class MolartRenderer {
       u.uWaxBehind.value = wax?.behind ?? 0.82;
       u.uWaxSoft.value = wax?.soft ?? 0;
       u.uGlass.value = glass ? 1 : 0;
+      const rigA = ((this.params.light?.angle ?? 0) * Math.PI) / 180, rigC = this.params.light?.color ?? [1, 1, 1];
+      u.uRig.value.set(Math.cos(rigA), Math.sin(rigA));
+      u.uRigCol.value.set(Math.pow(rigC[0], 2.2), Math.pow(rigC[1], 2.2), Math.pow(rigC[2], 2.2));
       u.uGlassDensity.value = glass?.density ?? 0;
       u.uGlassRefr.value = glass?.refraction ?? 0;
       u.uGlassThick.value = style.ribbon?.strandThickness ?? 0.8;

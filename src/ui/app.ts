@@ -274,12 +274,13 @@ export class App {
     els.sampleSel = sampleSel;
 
     // light: where the key light comes from and its colour
-    const lightAngle = h('input', { id: 'lightAngle', type: 'range', min: '0', max: '360', step: '5', value: String(this.settings.light?.angle ?? 0), 'aria-label': 'Light direction' }) as HTMLInputElement;
+    const lightAngle = h('input', { id: 'lightAngle', type: 'range', min: '0', max: '355', step: '5', value: String(this.settings.light?.angle ?? 0), 'aria-label': 'Light direction' }) as HTMLInputElement;
     const lightColor = h('input', { id: 'lightColor', type: 'color', value: this.settings.light?.color ?? '#ffffff', 'aria-label': 'Light colour', title: 'Light colour' }) as HTMLInputElement;
-    const lightReset = h('button', { class: 'quiet' }, 'Reset');
+    const lightOn = h('button', { id: 'sunBtn', 'aria-pressed': String(!!this.settings.light), title: 'Sunlight with cast shadows' }, 'Sun');
     lightAngle.addEventListener('input', () => this.setLight(parseFloat(lightAngle.value), lightColor.value));
     lightColor.addEventListener('input', () => this.setLight(parseFloat(lightAngle.value), lightColor.value));
-    lightReset.addEventListener('click', () => this.setLight(null));
+    lightOn.addEventListener('click', () => (this.settings.light ? this.setLight(null) : this.setLight(parseFloat(lightAngle.value), lightColor.value)));
+    els.lightOn = lightOn;
     els.lightAngle = lightAngle;
     els.lightColor = lightColor;
     els.name = h('span', { class: 'name' });
@@ -298,7 +299,7 @@ export class App {
       h('header', {}, h('h1', {}, 'molart'), closeBtn),
       h('section', {}, h('h2', {}, 'Structure'), h('div', { class: 'row' }, openBtn, file, sampleSel), h('div', { class: 'row' }, pdbId, fetchBtn)),
       h('section', {}, h('h2', {}, 'Picture'), h('div', { class: 'row' }, h('label', {}, 'Seed ', seed), size), h('div', { class: 'row' }, resetBtn, camBtn, galleryBtn)),
-      h('section', {}, h('h2', {}, 'Light'), h('div', { class: 'row' }, lightAngle, lightColor, lightReset)),
+      h('section', {}, h('h2', {}, 'Light'), h('div', { class: 'row light' }, lightOn, lightAngle, lightColor)),
       h('section', {}, h('h2', {}, 'Style'), technique),
       h('section', {}, h('h2', {}, 'About'), els.info, h('p', { class: 'technique' }, 'Drag to rotate, scroll to zoom, right-drag to pan. R resets the view; keys 1–9 and 0 switch styles.')),
     );
@@ -629,12 +630,15 @@ export class App {
     return l && c ? { angle: l.angle, color: c } : null;
   }
 
-  /** Key light: degrees turned from the default direction and a hex colour; null restores the default white light. */
+  /** Sun: on with a direction (degrees turned from upper left) and a hex colour; null turns it off. */
   setLight(angle: number | null, color = '#ffffff') {
-    if (angle === null || (angle % 360 === 0 && color.toLowerCase() === '#ffffff')) delete this.settings.light;
+    if (angle === null) delete this.settings.light;
     else this.settings.light = { angle: ((angle % 360) + 360) % 360, color };
-    (this.els.lightAngle as HTMLInputElement).value = String(this.settings.light?.angle ?? 0);
-    (this.els.lightColor as HTMLInputElement).value = this.settings.light?.color ?? '#ffffff';
+    if (this.settings.light) {
+      (this.els.lightAngle as HTMLInputElement).value = String(this.settings.light.angle);
+      (this.els.lightColor as HTMLInputElement).value = this.settings.light.color;
+    }
+    this.els.lightOn.setAttribute('aria-pressed', String(!!this.settings.light));
     this.r.setParams({ light: this.lightParam() });
     this.saveSettings();
   }

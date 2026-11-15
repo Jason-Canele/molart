@@ -72,6 +72,12 @@ uniform vec3 uFrameY;
 uniform vec3 uFrameC;
 uniform vec3 uColA;   // user-selectable style colours (sRGB); used by styles that offer a colour choice
 uniform vec3 uColB;
+// sun: cast shadows from the key light (a depth picture taken from the light), off unless the user turns the sun on
+uniform sampler2D tShadow;
+uniform mat4 uShadowMat;    // object space -> light clip space
+uniform float uShadowOn;
+uniform float uShadowTexel; // one shadow-map texel in uv
+uniform float uSunAmt;      // how much of the sun's light and shade this material takes (glass: little, its light is in the reflections)
 #ifdef PEEL
 uniform sampler2D tPrev;
 uniform vec2 uRes;
@@ -106,7 +112,26 @@ void main(){
   s.canvas = vec2(dot(vObjPos - uFrameC, uFrameX), dot(vObjPos - uFrameC, uFrameY));
   vec3 c = shadeSurface(s);
   // coloured key light: faces turned to the light take its colour, faces turned away keep their own
-  c *= mix(vec3(1.0), uSun, sstep(-0.3, 0.8, dot(n, normalize(uKey))));
+  {
+    // sunlight: what the sun reaches takes its colour; what it does not reach falls into a cool, darker shade
+    vec3 on = normalize(vObjN) * (gl_FrontFacing ? 1.0 : -1.0);
+    vec4 sc = uShadowMat * vec4(vObjPos + on * 0.35, 1.0);
+    vec3 sp = sc.xyz / sc.w * 0.5 + 0.5;
+    float ang = hash12(gl_FragCoord.xy) * 6.2831853, ca = cos(ang), sa = sin(ang);
+    float lit = 0.0;
+    for (int i = 0; i < 8; i++) {
+      float fi = float(i) + 0.5;
+      float rr = sqrt(fi / 8.0) * 2.0, th = fi * 2.3999632;
+      vec2 o = vec2(cos(th), sin(th)) * rr;
+      o = vec2(o.x * ca - o.y * sa, o.x * sa + o.y * ca) * uShadowTexel;
+      lit += step(sp.z - 0.0012, texture(tShadow, sp.xy + o).r);
+    }
+    lit /= 8.0;
+    float facing = sstep(-0.1, 0.55, dot(n, normalize(uKey)));
+    float direct = lit * facing;
+    vec3 shade = vec3(0.34, 0.38, 0.56);
+    c *= mix(vec3(1.0), mix(shade, uSun * 1.12, direct), uShadowOn * uSunAmt);
+  }
   gColor = vec4(max(c, vec3(0.0)), 1.0 + s.ss);
   gSurf = vec4(s.t, s.across, s.faceY, -vViewPos.z);
   gNormal = vec4(n, mod(mix(s.facet, gCreaseId, step(0.0, gCreaseId)), 2048.0)); // half-float safe id for crease detection
@@ -166,11 +191,16 @@ uniform float uGlass;        // 1 = resolve the layers as tinted glass
 uniform float uGlassDensity;
 uniform float uGlassRefr;
 uniform float uGlassThick;   // nominal thickness (Å) of a piece whose back face is unknown
+uniform vec2 uRig;           // the studio lights turn with the user's light: (cos, sin) of its angle
+uniform vec3 uRigCol;        // colour of the studio lights (linear rgb)
 out vec4 outColor;
 ${NOISE_GLSL}
 
-// highlights of a polished surface under a fixed studio rig (view-space normal, viewer along +z)
+// a view-space direction as the studio sees it: the lights are fixed in the studio, the studio turns with the light
+vec3 rig(vec3 v){ return vec3(v.x * uRig.x + v.y * uRig.y, -v.x * uRig.y + v.y * uRig.x, v.z); }
+// highlights of a polished surface under the studio rig (view-space normal, viewer along +z)
 float glassSpec(vec3 n){
+  n = rig(n);
   vec3 h1 = normalize(normalize(vec3(-0.45, 0.65, 0.62)) + vec3(0.0, 0.0, 1.0));
   vec3 h2 = normalize(normalize(vec3(0.62, 0.12, 0.6)) + vec3(0.0, 0.0, 1.0));
   float a = max(dot(n, h1), 0.0), b = max(dot(n, h2), 0.0);
@@ -286,12 +316,12 @@ void main(){
     vec3 back = mix(paper, glassBody(max(bt, vec3(1e-3)), bn, uGlassThick / max(abs(bn.z), 0.4)) + vec3(glassSpec(bn) * 0.3), found);
     col = back * glassBody(c0.rgb, n, thick);
     // the glass has body: part of the light is scattered in the tinted mass instead of passing through
-    float wrap = dot(n, normalize(vec3(-0.45, 0.65, 0.62))) * 0.5 + 0.5;
+    float wrap = dot(rig(n), normalize(vec3(-0.45, 0.65, 0.62))) * 0.5 + 0.5;
     vec3 solid = pow(max(c0.rgb, vec3(1e-3)), vec3(1.25)) * (0.66 + 0.4 * wrap);
     col = mix(col, solid, 0.13);
     // the far face of this piece: its own faint highlights, and its edges read as lines inside the glass
     vec3 n1 = normalize(texture(tPeelNormal, vUv).xyz + vec3(0.0, 0.0, 1e-4));
-    col += vec3(glassSpec(n1) * 0.25 * has1);
+    col += uRigCol * (glassSpec(n1) * 0.25 * has1);
     vec2 e = 1.3 * uPx * uTexel;
     vec2 iuv = vUv - n.xy * uGlassRefr * 0.5 * uPx * uTexel;   // seen through the front face, so shifted
     float pc = texture(tPeelSurf, iuv).w;
@@ -314,7 +344,7 @@ void main(){
     vec3 ng = normalize(n + vec3(ag * s0.y * 0.42 * isBar, 0.0));
     float gz = clamp(ng.z, 0.0, 1.0);
     float fres = 0.05 + 0.95 * pow(1.0 - gz, 5.0);
-    vec3 rr = 2.0 * ng.z * ng - vec3(0.0, 0.0, 1.0);
+    vec3 rr = rig(2.0 * ng.z * ng - vec3(0.0, 0.0, 1.0));
     // hard-edged soft boxes: a big key window upper left, a thin strip on the right, a low fill bar
     float key = sstep(-0.74, -0.70, rr.x) * (1.0 - sstep(-0.16, -0.12, rr.x)) * sstep(0.16, 0.20, rr.y) * (1.0 - sstep(0.80, 0.84, rr.y));
     float mull = 1.0 - 0.75 * (1.0 - sstep(0.0, 0.025, abs(rr.x + 0.43)));           // the window's glazing bar
@@ -324,8 +354,8 @@ void main(){
     // the dark side of the studio reflects too: it deepens the glass between the lights
     col *= 1.0 - 0.22 * (1.0 - sky) * (1.0 - cut);
     float refl = key * mull * 0.80 + strip * 0.55 + fill * 0.22 + sky * 0.10;
-    col = mix(col, vec3(0.985, 0.975, 1.0), clamp(refl * (0.42 + 0.58 * fres) + fres * 0.45, 0.0, 1.0) * (1.0 - 0.85 * cut));
-    col += vec3(glassSpec(ng));
+    col = mix(col, vec3(0.985, 0.975, 1.0) * uRigCol, clamp(refl * (0.42 + 0.58 * fres) + fres * 0.45, 0.0, 1.0) * (1.0 - 0.85 * cut));
+    col += uRigCol * glassSpec(ng);
   }
 
   // --- contour search ---

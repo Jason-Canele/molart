@@ -158,3 +158,7 @@ input[type='checkbox'] { accent-color: var(--ink); padding: 0; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 /* one label at a time: art mode already says the picture is an interpretation */
 #artWarn:not(.hidden) ~ #deformWarn { display: none; }
+/* light row: the Sun switch, then where it stands and its colour */
+.light { flex-wrap: nowrap; }
+.light input[type='range'] { flex: 1; min-width: 0; width: auto; }
+#sunBtn[aria-pressed='true'] { background: var(--ink); color: var(--on-ink); }
