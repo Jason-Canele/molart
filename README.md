@@ -5,10 +5,19 @@
 Artist-inspired renderings of real protein structures, in the browser.
 
 molart loads a PDB or mmCIF file, draws the usual protein cartoon, and then redraws the same
-structure in 21 styles: reimaginations inspired by Schiele, Picasso, Klimt, Van Gogh, Dalí, Monet,
-Hokusai, O'Keeffe, Warhol, Pollock, Kandinsky, Matisse, Mondrian and da Vinci, plus sumi-e, glass,
-frosted, cartoon, surface and ASCII styles. The pictures are original procedural drawings; no
-artist's work is reproduced.
+structure in 21 styles.
+
+## Inspired by great artists
+
+Egon Schiele, Pablo Picasso, Gustav Klimt, Vincent van Gogh, Salvador Dalí, Claude Monet,
+Katsushika Hokusai, Georgia O'Keeffe, Andy Warhol, Jackson Pollock, Wassily Kandinsky,
+Henri Matisse, Piet Mondrian and Leonardo da Vinci, and the sumi-e ink tradition.
+
+The styles are a tribute, not the artists' work: each is our own reimagination, drawn by code.
+
+Further styles: glass, frosted, cartoon, surface and ASCII.
+
+## Features
 
 - **Coordinates never change.** Every effect lives in display geometry and shaders.
 - **Science | Art.** Science mode keeps the ribbon geometry; art mode (opt-in, labelled) lets a
