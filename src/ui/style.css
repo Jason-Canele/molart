@@ -1,0 +1,158 @@
+/* One white sheet: the picture fills the window; a quiet dock below it chooses the style. Everything else lives in one drawer.
+   The look is deliberately single (light): the artwork is always on white paper, and the tool is part of that sheet. */
+:root {
+  --ink: #1d1d1f;          /* text, the one primary button */
+  --muted: #8a8a8f;        /* secondary text */
+  --line: #e6e6ea;         /* hairlines */
+  --line-strong: #c8c8ce;
+  --accent: #a4542a;       /* focus ring only */
+  --panel: #ffffff;
+  --field: #f4f4f6;        /* controls sit on a soft grey, without borders */
+  --on-ink: #ffffff;
+  --paper: #ffffff;
+  --warn-ink: #9a5a1c;
+  --error: #b3261e;
+  --overlay: rgba(255, 255, 255, 0.97);
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--font);
+  color: var(--ink);
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--paper); color: var(--ink); -webkit-font-smoothing: antialiased; }
+#app { display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100%; }
+main { position: relative; overflow: hidden; background: var(--paper); min-width: 0; min-height: 0; }
+canvas#view { width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+h1 { font-size: 15px; letter-spacing: -0.01em; margin: 0; font-weight: 600; }
+h2 { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin: 0; font-weight: 500; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+button, select, input {
+  font: inherit; font-size: 13px; color: var(--ink);
+  border: 0; border-radius: 999px; background: var(--field); padding: 7px 14px;
+}
+select { padding-right: 10px; }
+button { cursor: pointer; transition: background 0.15s, color 0.15s; }
+button:hover { background: var(--line); }
+button:focus-visible, select:focus-visible, input:focus-visible, canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--ink); color: var(--on-ink); font-weight: 500; }
+button.primary:hover { background: #000; }
+button.quiet { background: none; color: var(--muted); padding-inline: 6px; }
+button.quiet:hover { color: var(--ink); background: none; }
+button.round { width: 32px; height: 32px; padding: 0; line-height: 1; font-size: 16px; letter-spacing: 1px; }
+label { font-size: 13px; color: var(--muted); }
+input[type='range'] { width: 180px; max-width: 100%; padding: 0; background: none; accent-color: var(--ink); }
+input[type='color'] { width: 26px; height: 26px; padding: 0; border-radius: 50%; background: none; overflow: hidden; }
+input[type='checkbox'] { accent-color: var(--ink); padding: 0; }
+.hidden { display: none !important; }
+
+/* top: the name on the left, the two actions on the right */
+.top {
+  position: absolute; inset: 0 0 auto 0; display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding-block: calc(14px + env(safe-area-inset-top, 0px)) 0;
+  padding-left: max(18px, env(safe-area-inset-left, 0px)); padding-right: max(18px, env(safe-area-inset-right, 0px));
+  pointer-events: none;
+}
+.top > * { pointer-events: auto; }
+.brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.brand .name { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.error {
+  position: absolute; top: calc(58px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%);
+  width: max-content; max-width: min(560px, calc(100% - 32px));
+  font-size: 13px; line-height: 1.4; color: var(--error); background: var(--paper);
+  border-radius: 14px; padding: 10px 16px; box-shadow: 0 6px 30px rgba(0, 0, 0, 0.10), 0 0 0 1px var(--line);
+}
+.error:empty { display: none; }
+.drop {
+  position: absolute; inset: 16px; border: 1.5px dashed var(--line-strong); border-radius: 22px;
+  display: grid; place-items: center; font-size: 17px; color: var(--muted);
+  background: rgba(255, 255, 255, 0.9); pointer-events: none;
+}
+
+/* dock: at most one control for the current style, the style row, and the mode switch on the bottom row */
+.dock {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0;
+  padding-block: 4px calc(12px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.context { display: flex; gap: 22px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.context:not(:has(.ctl:not(.hidden))) { display: none; }
+.ctl { display: flex; gap: 10px; align-items: center; }
+.swatches { display: flex; gap: 8px; }
+.swatch { width: 22px; height: 22px; padding: 0; border-radius: 50%; box-shadow: 0 0 0 1px var(--line); }
+.swatch[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3.5px var(--ink); }
+.check { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--ink); }
+.note { font-size: 12px; color: var(--muted); min-width: 92px; }
+.technique { font-size: 12px; color: var(--muted); line-height: 1.45; margin: 0; }
+.warn { font-size: 12px; color: var(--warn-ink); margin: 0; line-height: 1.4; }
+.bar { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px 14px; max-width: 100%; min-width: 0; }
+.mode { display: flex; flex: none; background: var(--field); border-radius: 999px; padding: 3px; }
+.mode button { background: none; padding: 5px 14px; color: var(--muted); }
+.mode button[aria-pressed='true'] { background: var(--paper); color: var(--ink); font-weight: 500; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.mode button.none[aria-pressed='false'] { opacity: 0.45; }
+.targets { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.targets::-webkit-scrollbar { display: none; }
+.targets button { flex: none; padding-inline: 11px; }
+.styles {
+  display: flex; gap: 2px; overflow-x: auto; min-width: 0; max-width: 100%; scrollbar-width: none; padding: 3px 18px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 18px, #000 calc(100% - 18px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 18px, #000 calc(100% - 18px), transparent);
+}
+.styles::-webkit-scrollbar { display: none; }
+.styles button { flex: none; background: none; color: var(--muted); padding: 6px 11px; white-space: nowrap; }
+.styles button:hover { color: var(--ink); background: none; }
+.styles button[aria-pressed='true'] { color: var(--ink); font-weight: 600; background: var(--field); }
+
+/* drawer: everything that is not choosing a style or exporting */
+.scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.12); z-index: 5; }
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(340px, 100%); z-index: 6; background: var(--paper);
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.10); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 26px;
+  padding-block: calc(14px + env(safe-area-inset-top, 0px)) calc(24px + env(safe-area-inset-bottom, 0px));
+  padding-left: 22px; padding-right: max(18px, env(safe-area-inset-right, 0px));
+  transform: translateX(105%); visibility: hidden; transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0.28s;
+}
+.drawer.open { transform: none; visibility: visible; }
+.drawer header { display: flex; justify-content: space-between; align-items: center; }
+.drawer section { display: flex; flex-direction: column; gap: 10px; }
+.drawer select { max-width: 100%; min-width: 0; }
+.info { font-size: 12px; color: var(--muted); line-height: 1.6; word-break: break-word; }
+.info b { color: var(--ink); font-weight: 500; }
+.info .warn { text-align: left; margin-top: 6px; }
+
+.gallery, .exportbox {
+  position: fixed; inset: 0; background: var(--overlay); z-index: 10;
+  display: flex; flex-direction: column; gap: 12px;
+  padding-block: max(18px, env(safe-area-inset-top, 0px)) max(18px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.gallery header, .exportbox header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.gallery { backdrop-filter: blur(8px); }
+.gallery .row { align-items: center; }
+.gallery .status { font-size: 12px; color: var(--muted); }
+.gallery .grid {
+  flex: 1; min-height: 0; width: 100%; margin: 0 auto; overflow: auto;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-content: center;
+}
+.gallery figure { margin: 0; min-width: 0; cursor: pointer; display: flex; flex-direction: column; }
+.gallery .tile {
+  aspect-ratio: var(--tile-aspect, 1.5); width: 100%; max-width: 100%;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.gallery .tile:empty { background: linear-gradient(100deg, #fff 40%, #f3efea 50%, #fff 60%) 0 0 / 200% 100% var(--paper); animation: shimmer 1.4s linear infinite; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+.gallery figure:hover .tile { border-color: var(--line-strong); box-shadow: 0 2px 10px rgba(60, 40, 20, 0.08); }
+.gallery img { width: 100%; height: 100%; display: block; object-fit: contain; }
+.gallery figcaption { font-size: 12px; padding: 5px 2px 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 21px; }
+.exportbox .frame { flex: 1; min-height: 0; display: grid; place-items: center; }
+.exportbox img { max-width: 100%; max-height: 100%; object-fit: contain; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; }
+.exportbox p { margin: 0; font-size: 13px; color: var(--muted); }
+@media (max-width: 620px) {
+  input[type='range'] { width: 150px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+/* one label at a time: art mode already says the picture is an interpretation */
+#artWarn:not(.hidden) ~ #deformWarn { display: none; }

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+coverage/
+.playwright/
+.DS_Store
+__pycache__/
+.pytest_cache/
+outputs/
+*.log
+dist-artifact/
