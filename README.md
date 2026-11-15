@@ -53,6 +53,8 @@ npm run test:e2e     # browser tests (needs a build and Chromium)
 
 ## Credits
 
+- molart was inspired by Sergey Ovchinnikov's protein structure visualization in
+  [LocalFold](https://github.com/sokrypton/localfold).
 - [three.js](https://threejs.org) (MIT) for WebGL rendering.
 - The ASCII style is inspired by [ascii-fold](https://github.com/mitsenkov/ascii-fold) by
   Maxim Tsenkov (MIT).
