@@ -4,6 +4,8 @@
 
 Artist-inspired renderings of real protein structures, in the browser.
 
+<img src="docs/molart.gif" alt="molart drawing the same protein in many styles" width="360">
+
 molart loads a PDB or mmCIF file, draws the usual protein cartoon, and then redraws the same
 structure in 21 styles.
 
