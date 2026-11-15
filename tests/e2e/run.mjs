@@ -17,13 +17,15 @@ const check = (name, ok, detail = '') => {
 
 const server = await serveStatic(join(ROOT, 'dist'));
 const { browser, page, errors } = await launch({ width: 1280, height: 860 });
+const SLOW = process.env.CI ? 6 : 1;   // hosted CI renders in software on two cores
+page.setDefaultTimeout(30000 * SLOW);
 const external = [];
 page.on('request', (r) => {
   if (!r.url().startsWith(server.url) && !r.url().startsWith('data:') && !r.url().startsWith('blob:')) external.push(r.url());
 });
 try {
   await page.goto(`${server.url}?sample=1TIM`);
-  await page.waitForFunction(() => window.molart?.ready(), null, { timeout: 60000 });
+  await page.waitForFunction(() => window.molart?.ready(), null, { timeout: 60000 * SLOW });
   const info = await page.evaluate(() => window.molart.info());
   check('loads bundled 1TIM sample', info.id === '1TIM' && info.chains.join() === 'A,B' && info.residues === 494, JSON.stringify({ id: info.id, residues: info.residues }));
   const fp0 = info.fingerprint;
@@ -34,13 +36,13 @@ try {
   const onReq = () => reqDuringImport++;
   page.on('request', onReq);
   await page.setInputFiles('#file', join(ROOT, 'public/samples/3CHY.pdb'));
-  await page.waitForFunction(() => window.molart.info()?.id === '3CHY', null, { timeout: 30000 });
+  await page.waitForFunction(() => window.molart.info()?.id === '3CHY', null, { timeout: 30000 * SLOW });
   page.off('request', onReq);
   check('local PDB file import (no network requests)', reqDuringImport === 0 && external.length === before, `requests=${reqDuringImport}`);
 
   // back to 1TIM via mmCIF file
   await page.setInputFiles('#file', join(ROOT, 'public/samples/1TIM.cif'));
-  await page.waitForFunction(() => window.molart.info()?.id === '1TIM', null, { timeout: 30000 });
+  await page.waitForFunction(() => window.molart.info()?.id === '1TIM', null, { timeout: 30000 * SLOW });
   await page.evaluate(() => window.molart.resetCamera());
   const cam0 = await page.evaluate(() => window.molart.getCamera());
 
@@ -48,7 +50,7 @@ try {
   const box = await page.locator('#view').boundingBox();
   const styles = await page.evaluate(() => window.molart.styles().map((s) => s.id));
   for (let i = 0; i < styles.length; i++) {
-    await page.locator('#view').click({ position: { x: 20, y: 20 }, force: true })   // focus only; on a slow software renderer the canvas never counts as 'stable';
+    await page.locator('#view').click({ position: { x: 20, y: 20 }, force: true });   // focus only: on a slow software renderer the canvas never counts as 'stable'
     if (i < 10) await page.keyboard.press(i === 9 ? '0' : String(i + 1));
     else await page.locator(`[data-style="${styles[i]}"]`).click();
     const pressed = await page.locator(`[data-style="${styles[i]}"]`).getAttribute('aria-pressed');
@@ -373,7 +375,7 @@ try {
       localStorage.setItem('molart.pending.v1', JSON.stringify({ style: 'klimt', art: true }));
     });
     await page.reload();
-    await page.waitForFunction(() => window.molart && window.molart.info(), null, { timeout: 60000 });
+    await page.waitForFunction(() => window.molart && window.molart.info(), null, { timeout: 60000 * SLOW });
     await page.waitForTimeout(500);
     const st = await page.evaluate(() => ({ pressed: document.querySelector('[data-style="normal"]').getAttribute('aria-pressed'), art: document.getElementById('artToggle').checked, msg: document.querySelector('.error').textContent }));
     check('safe start after an unfinished drawing', safe && st.pressed === 'true' && !st.art && /Klimt/.test(st.msg) && /art mode/.test(st.msg), JSON.stringify(st));
@@ -383,8 +385,8 @@ try {
   // gallery
   await page.locator('#moreBtn').click();
   await page.getByText('Same-view gallery').click();
-  await page.waitForSelector('.gallery img', { timeout: 120000 });
-  await page.waitForFunction(() => document.querySelectorAll('.gallery img').length === window.molart.styles().length, null, { timeout: 120000 });
+  await page.waitForSelector('.gallery img', { timeout: 120000 * SLOW });
+  await page.waitForFunction(() => document.querySelectorAll('.gallery img').length === window.molart.styles().length, null, { timeout: 120000 * SLOW });
   check('same-camera gallery shows every style', true);
   await page.screenshot({ path: join(ROOT, 'outputs/ui-gallery.png') });
   await page.keyboard.press('Escape');
