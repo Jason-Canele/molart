@@ -6,8 +6,7 @@ Artist-inspired renderings of real protein structures, in the browser.
 
 <img src="docs/molart.gif" alt="molart drawing the same protein in many styles" width="360">
 
-molart loads a PDB or mmCIF file, draws the usual protein cartoon, and then redraws the same
-structure in 21 styles.
+molart loads a PDB or mmCIF file, draws the usual protein cartoon, and then redraws the same structure in 21 styles.
 
 ## Inspired by great artists
 
@@ -50,17 +49,6 @@ node cli/molart.mjs gallery public/samples/1TIM.cif --size 2048 --output-dir out
 node cli/molart.mjs styles
 ```
 
-## Tests
-
-```sh
-npm test             # unit tests
-npm run test:e2e     # browser tests (needs a build and Chromium)
-```
-
-## Website
-
-`.github/workflows/pages.yml` builds the app and deploys it to GitHub Pages on every push to
-`main`, once Pages is enabled for the repository (Settings → Pages → Source: GitHub Actions).
 
 ## Credits
 
@@ -70,7 +58,7 @@ npm run test:e2e     # browser tests (needs a build and Chromium)
 - The Glass style is inspired by a protein rendering in a
   [LinkedIn post](https://www.linkedin.com/feed/update/urn:li:activity:7526936072279212032/) by Latent Labs.
 - The ASCII style is inspired by [ascii-fold](https://github.com/mitsenkov/ascii-fold) by
-  Maxim Tsenkov (MIT).
+  Maxim Tsenkov.
 - Sample structures in `public/samples/` (1TIM, 3CHY, 1UBQ, 4HHB) are unmodified downloads from
   the [RCSB PDB](https://www.rcsb.org) (CC0 1.0).
 
