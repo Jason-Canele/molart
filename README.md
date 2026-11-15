@@ -55,7 +55,8 @@ npm run test:e2e     # browser tests (needs a build and Chromium)
 
 - molart was inspired by Sergey Ovchinnikov's protein structure visualization in
   [LocalFold](https://github.com/sokrypton/localfold).
-- The Glass style is inspired by a protein rendering in a LinkedIn post by Latent Labs.
+- The Glass style is inspired by a protein rendering in a
+  [LinkedIn post](https://www.linkedin.com/feed/update/urn:li:activity:7526936072279212032/) by Latent Labs.
 - [three.js](https://threejs.org) (MIT) for WebGL rendering.
 - The ASCII style is inspired by [ascii-fold](https://github.com/mitsenkov/ascii-fold) by
   Maxim Tsenkov (MIT).
