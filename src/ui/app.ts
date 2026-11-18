@@ -8,6 +8,9 @@ const SAMPLES = [
   { id: '3CHY', label: '3CHY — CheY (compact α/β)' },
   { id: '1UBQ', label: '1UBQ — ubiquitin (small α/β)' },
   { id: '4HHB', label: '4HHB — haemoglobin (4 chains, all-α)' },
+  { id: '1BNA', label: '1BNA — B-DNA dodecamer (double helix)' },
+  { id: '1EHZ', label: '1EHZ — tRNA-Phe (RNA)' },
+  { id: '1AAY', label: '1AAY — Zif268 zinc fingers on DNA' },
 ];
 
 interface Settings {
@@ -142,7 +145,7 @@ export class App {
     this.settings.faces = this.settings.faces !== false;
     this.settings.asciiAmount = num(this.settings.asciiAmount, 0.5, 0, 1);
 
-    const canvas = h('canvas', { id: 'view', tabindex: '0', 'aria-label': 'Protein view. Drag to rotate, scroll to zoom, right-drag to pan.' }) as HTMLCanvasElement;
+    const canvas = h('canvas', { id: 'view', tabindex: '0', 'aria-label': 'Structure view. Drag to rotate, scroll to zoom, right-drag to pan.' }) as HTMLCanvasElement;
     const main = h('main', {}, canvas, h('div', { class: 'drop hidden', id: 'drop' }, 'Drop a .pdb / .cif / .mmcif file'));
     const ui = this.buildPanel();
     main.append(ui.top, this.els.error);
@@ -520,14 +523,16 @@ export class App {
     if (!s) return;
     const counts = { H: 0, E: 0, C: 0 };
     s.residues.forEach((r) => counts[r.ss]++);
-    const ssLabel = { file: 'from file records', 'computed-dssp': 'computed (DSSP-like)', 'computed-ca': 'computed from CA only (approximate)' }[s.ssSource];
+    const ssLabel = { file: 'from file records', 'computed-dssp': 'computed (DSSP-like)', 'computed-ca': 'computed from CA only (approximate)', none: 'none (no protein)' }[s.ssSource];
+    const nNuc = s.residues.filter((r) => r.kind === 'nucleic').length;
     this.els.info.innerHTML = '';
     this.els.name.textContent = s.id;
     const line = (k: string, v: string) => this.els.info.append(h('div', {}, h('b', {}, k + ': '), v));
     line('Structure', `${s.id}${this.fileName ? ` (${this.fileName})` : ''}`);
     if (s.title) line('Title', s.title);
     line('Chains', s.chains.map((c) => `${c.id || '_'} (${c.residueEnd - c.residueStart})`).join(', '));
-    line('Residues', `${s.residues.length} · helix ${counts.H} · strand ${counts.E} · coil ${counts.C}`);
+    if (nNuc < s.residues.length) line('Residues', `${s.residues.length - nNuc} · helix ${counts.H} · strand ${counts.E} · coil ${counts.C - nNuc}`);
+    if (nNuc) line('Nucleotides', `${nNuc}`);
     line('Secondary structure', ssLabel);
     line('Coordinates', `${s.coords.length / 3} atoms · fingerprint ${coordinateFingerprint(s)}`);
     line('Renderer', `v${RENDERER_VERSION}`);

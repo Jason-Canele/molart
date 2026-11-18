@@ -222,3 +222,40 @@ describe('art-mode shape tools', () => {
     }
   });
 });
+
+describe('DNA / RNA', () => {
+  test('reads nucleotides as polymer residues next to the protein', () => {
+    const s = loadStructure(sample('1AAY.cif'), '1AAY.cif');
+    expect(s.chains.map((c) => `${c.id}:${c.residueEnd - c.residueStart}:${s.residues[c.residueStart].kind}`)).toEqual(['B:11:nucleic', 'C:11:nucleic', 'A:85:protein']);
+    expect(s.residues.filter((r) => r.kind === 'nucleic').every((r) => r.ss === 'C' && r.ca >= 0)).toBe(true);
+    expect(s.caOnly).toBe(false);
+  });
+  test('draws a backbone band and one base slab per nucleotide, in science and art mode alike', () => {
+    const s = loadStructure(sample('1BNA.cif'), '1BNA.cif');
+    expect(s.residues.length).toBe(24);
+    expect(s.ssSource).toBe('none');
+    const before = coordinateFingerprint(s);
+    const m = buildRibbon(s);
+    for (const v of m.positions) expect(Number.isFinite(v)).toBe(true);
+    // slabs carry code 2 and end exactly on the base's N1 (purine) / N3 (pyrimidine) atom
+    const slabRes = new Set<number>();
+    for (let i = 0; i < m.vertexCount; i++) if (Math.round(m.surf[4 * i + 3]) === 2) slabRes.add(m.info[4 * i + 1]);
+    expect(slabRes.size).toBe(24);
+    const r = s.residues[3], names = s.atomNames.slice(r.atomStart, r.atomEnd);
+    const tip = r.atomStart + names.indexOf(names.includes('N9') ? 'N1' : 'N3');
+    let best = Infinity;
+    for (let i = 0; i < m.vertexCount; i++) {
+      if (m.info[4 * i + 1] !== 3 || Math.round(m.surf[4 * i + 3]) !== 2) continue;
+      best = Math.min(best, Math.hypot(m.centers[3 * i] - s.coords[3 * tip], m.centers[3 * i + 1] - s.coords[3 * tip + 1], m.centers[3 * i + 2] - s.coords[3 * tip + 2]));
+    }
+    expect(best).toBeLessThan(1e-3);
+    const art = buildRibbon(s, { smooth: { helix: 8, coil: 5 }, exaggerate: 1, outline: { coil: { kind: 'brush' } }, runs: true });
+    expect(Array.from(art.positions)).toEqual(Array.from(m.positions));
+    expect(coordinateFingerprint(s)).toBe(before);
+  });
+  test('leaves a lone nucleotide ligand out', () => {
+    const atom = (n: number, name: string, x: number) => `HETATM${String(n).padStart(5)} ${name.padEnd(4)} AMP A   1    ${x.toFixed(3).padStart(8)}   0.000   0.000  1.00  0.00`;
+    const lone = [atom(1, ' P', 0), atom(2, " C4'", 3), atom(3, " C1'", 5), atom(4, ' N9', 6.5), atom(5, ' N1', 10)].join('\n') + '\n';
+    expect(() => loadStructure(lone, 'x.pdb')).toThrow(/No protein or nucleic/);
+  });
+});

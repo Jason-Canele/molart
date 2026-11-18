@@ -1,7 +1,7 @@
 import type { SSRange } from '../io/types';
 import type { SS } from './structure';
 
-export type SSSource = 'file' | 'computed-dssp' | 'computed-ca';
+export type SSSource = 'file' | 'computed-dssp' | 'computed-ca' | 'none';
 
 interface ProtoRes {
   chainId: string;

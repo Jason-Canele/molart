@@ -6,7 +6,7 @@
  * parameters (residue parameter t, across-ribbon coordinate, profile angle) so
  * that artistic marks can be attached to the protein rather than to the screen.
  */
-import type { Structure } from '../model/structure';
+import { NUCLEIC_LINK, type Structure } from '../model/structure';
 
 export interface RibbonOptions {
   /** Spline samples per residue (even number). */
@@ -80,6 +80,11 @@ export interface RibbonOptions {
   runs?: boolean;
   /** Art mode: leave this much bare paper (Å) between consecutive pieces (where the secondary structure changes). */
   gap?: number;
+  /** DNA / RNA backbone band: width and thickness in Å (defaults: 0.8 x the helix width, the helix thickness). */
+  nucleicWidth?: number;
+  nucleicThickness?: number;
+  /** DNA / RNA base slab: width in Å (0 = draw no bases). */
+  baseWidth?: number;
 }
 
 export interface MeshData {
@@ -150,6 +155,9 @@ export const DEFAULT_RIBBON: Required<RibbonOptions> = {
   sharp: false,
   runs: false,
   gap: 0,
+  nucleicWidth: 0,
+  nucleicThickness: 0,
+  baseWidth: 1.7,
 };
 
 /** Scale every width-like art option by `f` (used to keep large proteins from crowding). Thickness is left alone. */
@@ -167,7 +175,7 @@ export function scaleRibbonWidths(r: RibbonOptions, f: number): RibbonOptions {
   return out;
 }
 
-/** Split chains into continuous backbone segments (break when CA–CA > 4.3 Å). */
+/** Split chains into continuous backbone segments (break when CA–CA > 4.3 Å; for nucleotides when the trace atoms are > 8.5 Å apart). */
 export function backboneSegments(s: Structure): { chainIndex: number; first: number; last: number }[] {
   const out: { chainIndex: number; first: number; last: number }[] = [];
   const c = s.coords;
@@ -178,7 +186,8 @@ export function backboneSegments(s: Structure): { chainIndex: number; first: num
       let brk = next >= ch.residueEnd;
       if (!brk) {
         const a = s.residues[i].ca, b = s.residues[next].ca;
-        brk = Math.hypot(c[3 * a] - c[3 * b], c[3 * a + 1] - c[3 * b + 1], c[3 * a + 2] - c[3 * b + 2]) > 4.3;
+        const nuc = s.residues[i].kind === 'nucleic';
+        brk = s.residues[next].kind !== s.residues[i].kind || Math.hypot(c[3 * a] - c[3 * b], c[3 * a + 1] - c[3 * b + 1], c[3 * a + 2] - c[3 * b + 2]) > (nuc ? NUCLEIC_LINK : 4.3);
       }
       if (brk) {
         out.push({ chainIndex: ch.index, first, last: i });
@@ -226,6 +235,8 @@ export function buildRibbon(s: Structure, options: RibbonOptions = {}): MeshData
     if (n < 2) continue; // a single isolated residue cannot form a ribbon
     const ss = res.map((r) => r.ss);
     const ca = res.map((r) => atom(r.ca));
+    // DNA / RNA: a band through the trace atoms with a slab for every base; drawn true in every mode (no art-mode reshaping)
+    const nuc = res[0].kind === 'nucleic';
 
     // --- control points (strands smoothed to remove the CA pleat, display only) ---
     const ctrl: V[] = ca.map((p, k) => {
@@ -236,7 +247,7 @@ export function buildRibbon(s: Structure, options: RibbonOptions = {}): MeshData
     });
 
     // art mode: smooth the path (display only; the structure is not touched)
-    const sm = o.smooth ?? {};
+    const sm = nuc ? {} : o.smooth ?? {};
     const lim = ss.map((t) => (t === 'H' ? sm.helix ?? 0 : t === 'E' ? sm.strand ?? 0 : sm.coil ?? 0));
     const passes = Math.max(sm.helix ?? 0, sm.strand ?? 0, sm.coil ?? 0);
     for (let it = 0; it < passes; it++) {
@@ -244,7 +255,7 @@ export function buildRibbon(s: Structure, options: RibbonOptions = {}): MeshData
       for (let k = 1; k < n - 1; k++) if (it < lim[k]) ctrl[k] = scale(add(add(prev[k - 1], prev[k + 1]), scale(prev[k], 2)), 0.25);
     }
 
-    if (o.exaggerate > 0) {
+    if (o.exaggerate > 0 && !nuc) {
       let sm2 = ctrl.map((q) => [q[0], q[1], q[2]] as V);
       for (let it = 0; it < 5; it++) {
         const prev = sm2.map((q) => [q[0], q[1], q[2]] as V);
@@ -264,7 +275,7 @@ export function buildRibbon(s: Structure, options: RibbonOptions = {}): MeshData
     // segments of the path that are straight by construction (for `sharp`)
     const linSeg: boolean[] = new Array(n).fill(false);
     const fr = o.frame;
-    if (fr && (o.path || o.curl || o.wave)) {
+    if (fr && !nuc && (o.path || o.curl || o.wave)) {
       const F = ctrl.map((q) => [dot(q, fr[0] as V), dot(q, fr[1] as V), dot(q, fr[2] as V)] as V);
       const mix3 = (a: V, b: V, u: number): V => [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u];
       const solid = (k: number) => ss[k] !== 'C' && run1[k] - run0[k] >= 2;
@@ -380,6 +391,21 @@ export function buildRibbon(s: Structure, options: RibbonOptions = {}): MeshData
       }
       k = e + 1;
     }
+    if (nuc) {
+      // the band lies on the surface of the (double) helix: width along the curve's binormal, top face away from the axis
+      if (n > 2) { side[0] = side[1]; side[n - 1] = side[n - 2]; }
+      for (let k = 1; k < n; k++) if (dot(side[k], side[k - 1]) < 0) side[k] = scale(side[k], -1);
+      for (let it = 0; it < 2; it++) {
+        const prev = side.map((q) => [q[0], q[1], q[2]] as V);
+        for (let k = 1; k < n - 1; k++) side[k] = norm(add(add(prev[k - 1], prev[k + 1]), scale(prev[k], 2)));
+      }
+      let vote = 0;
+      for (let j = 1; j < n - 1; j++) {
+        const inward = sub(scale(add(ca[j - 1], ca[j + 1]), 0.5), ca[j]);
+        vote += dot(cross(norm(sub(ca[j + 1], ca[j - 1])), side[j]), inward);
+      }
+      if (vote > 0) for (let k = 0; k < n; k++) side[k] = scale(side[k], -1);
+    }
     // continuity for everything else
     for (let k = 1; k < n; k++) if (ss[k] !== 'H' && dot(side[k], side[k - 1]) < 0) side[k] = scale(side[k], -1);
     // strands: average neighbouring sides to suppress alternating peptide flips
@@ -391,7 +417,7 @@ export function buildRibbon(s: Structure, options: RibbonOptions = {}): MeshData
 
     // art mode: bands laid flat towards one direction (a collapsed helix has no meaningful peptide plane)
     const fd = o.faceDir as V;
-    if ((passes > 0 || o.face === 'all') && len(fd) > 0.5) {
+    if (!nuc && (passes > 0 || o.face === 'all') && len(fd) > 0.5) {
       const flat = side2.map((sd, k) => {
         if (!(o.face === 'all' || (ss[k] === 'H' && (sm.helix ?? 0) >= 4))) return sd;
         const T = norm(sub(ctrl[Math.min(n - 1, k + 1)], ctrl[Math.max(0, k - 1)]));
@@ -437,7 +463,9 @@ export function buildRibbon(s: Structure, options: RibbonOptions = {}): MeshData
 
     // --- profile along t ---
     const coil = o.coilWidth > 0 ? { w: o.coilWidth, h: o.coilThickness || o.coilWidth * 0.35, p: o.coilFlatness } : { w: o.coilRadius * 2, h: o.coilRadius * 2, p: 2 };
+    const band = { w: o.nucleicWidth || o.helixWidth * 0.8, h: o.nucleicThickness || o.helixThickness, p: o.helixFlatness ?? o.flatness };
     const nominal = (k: number) => {
+      if (nuc) return band;
       const t = ss[Math.max(0, Math.min(n - 1, k))];
       if (t === 'H') return { w: o.helixWidth, h: o.helixThickness, p: o.helixFlatness ?? o.flatness };
       if (t === 'E') return { w: o.strandWidth, h: o.strandThickness, p: o.flatness };
@@ -503,6 +531,7 @@ export function buildRibbon(s: Structure, options: RibbonOptions = {}): MeshData
     let prevT: V | null = null;
     let prevS: V | null = null;
     const ringStarts: number[] = [];
+    const arcAt: number[] = new Array(n).fill(arc);
     for (let si2 = 0; si2 < samples.length; si2++) {
       const { t, step, brk } = samples[si2];
       const { p, d, mit } = spline(t);
@@ -520,7 +549,7 @@ export function buildRibbon(s: Structure, options: RibbonOptions = {}): MeshData
       {
         const kq = Math.min(n - 1, Math.max(0, Math.round(t)));
         const ol = ss[kq] === 'H' ? o.outline?.helix : ss[kq] === 'E' ? o.outline?.strand : o.outline?.coil;
-        if (ol && !pr.arrow && run1[kq] - run0[kq] >= 2) {
+        if (ol && !nuc && !pr.arrow && run1[kq] - run0[kq] >= 2) {
           const a0 = run0[kq] - 0.5, a1 = run1[kq] + 0.5, u = Math.min(1, Math.max(0, (t - a0) / (a1 - a0)));
           const floor_ = ol.min ?? coil.w * 0.8;
           let fmul = 1;
@@ -534,7 +563,7 @@ export function buildRibbon(s: Structure, options: RibbonOptions = {}): MeshData
           if (ol.min !== undefined) pr.h = Math.min(pr.h, Math.max(pr.w, ol.min));
         }
       }
-      if (o.bulges.length && !pr.arrow) {
+      if (o.bulges.length && !pr.arrow && !nuc) {
         let grow = 0;
         for (const bu of o.bulges) {
           const q = Math.abs((seg.first + t - bu.t) / bu.span);
@@ -553,7 +582,7 @@ export function buildRibbon(s: Structure, options: RibbonOptions = {}): MeshData
         pr.h *= 1 + (mit.m - 1) * Math.abs(dot(B, mit.dir));
       }
       const resIdx = seg.first + Math.min(n - 1, Math.max(0, Math.round(t)));
-      const ssCode = SS_CODE[s.residues[resIdx].ss];
+      const ssCode = nuc ? 1 : SS_CODE[s.residues[resIdx].ss];
       const ringStart = P.length / 3;
       {
         const kq = resIdx - seg.first;
@@ -562,6 +591,7 @@ export function buildRibbon(s: Structure, options: RibbonOptions = {}): MeshData
       const a = pr.w / 2, b = pr.h / 2, pe = pr.p;
       if (prevP) arc += len(sub(p, prevP));
       prevP = p;
+      if (Math.abs(t - Math.round(t)) < 1e-9) arcAt[Math.round(t)] = arc;
       curCenter = p;
       let perim = 0;
       let lastXY: [number, number] | null = null;
@@ -642,6 +672,75 @@ export function buildRibbon(s: Structure, options: RibbonOptions = {}): MeshData
         const j1 = (j + 1) % segs;
         if (sign > 0) ID.push(centre, base + j, base + j1);
         else ID.push(centre, base + j1, base + j);
+      }
+    }
+    // --- DNA / RNA bases: a slab in the plane of each base, from the backbone to the base's N1 (purine) / N3 (pyrimidine) ---
+    if (nuc && o.baseWidth > 0) {
+      for (let k = 0; k < n; k++) {
+        const r = res[k];
+        const find = (name: string) => {
+          for (let a = r.atomStart; a < r.atomEnd; a++) if (s.atomNames[a] === name) return a;
+          return -1;
+        };
+        const tipA = find(find('N9') >= 0 ? 'N1' : 'N3');
+        if (tipA < 0) continue;
+        const from = ctrl[k], D = sub(atom(tipA), from), L = len(D);
+        if (L < 1.5 || L > 16) continue;
+        const T = norm(D);
+        const c2 = find('C2'), c4 = find('C4'), c6 = find('C6');
+        let S: V = c2 >= 0 && c4 >= 0 && c6 >= 0 ? cross(cross(sub(atom(c4), atom(c2)), sub(atom(c6), atom(c2))), T) : [0, 0, 0];
+        if (len(S) < 1e-3) S = cross(T, Math.abs(T[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]);
+        S = norm(S);
+        const B = cross(T, S);
+        const a = o.baseWidth / 2, b = Math.max(band.h, 0.3) / 2, pe = Math.max(4, band.p);
+        const resIdx = seg.first + k;
+        curRun = [Math.min(1, Math.max(0, (k + 0.5) / n)), seg.first + 1];
+        const rings: number[] = [];
+        for (let ri = 0; ri < 2; ri++) {
+          const c = add(from, scale(D, ri));
+          curCenter = c;
+          rings.push(P.length / 3);
+          let perim = 0;
+          let lastXY: [number, number] | null = null;
+          for (let j = 0; j < segs; j++) {
+            const th = (2 * Math.PI * (j + (o.cornerProfile ? 0.5 : 0))) / segs;
+            const cs = Math.cos(th), sn = Math.sin(th);
+            const x = a * Math.sign(cs) * Math.pow(Math.abs(cs), 2 / pe);
+            const y = b * Math.sign(sn) * Math.pow(Math.abs(sn), 2 / pe);
+            let nx = (Math.sign(x) * Math.pow(Math.abs(x / a), pe - 1)) / a;
+            let ny = (Math.sign(y) * Math.pow(Math.abs(y / b), pe - 1)) / b;
+            const nl = Math.hypot(nx, ny) || 1;
+            nx /= nl;
+            ny /= nl;
+            if (lastXY) perim += Math.hypot(x - lastXY[0], y - lastXY[1]);
+            lastXY = [x, y];
+            curPhys = [arcAt[k] + L * ri, x, y, perim];
+            // a position along the chain of its own (never a whole residue), so the slab is not taken for a ring of the backbone
+            pushV(add(c, add(scale(S, x), scale(B, y))), norm(add(scale(S, nx), scale(B, ny))), [resIdx + 0.26 + 0.01 * ri, j / segs, x / a, 2], [seg.chainIndex, resIdx, ny, 0], T);
+          }
+        }
+        for (let j = 0; j < segs; j++) {
+          const j1 = (j + 1) % segs;
+          const a0 = rings[0] + j, a1 = rings[0] + j1, b0 = rings[1] + j, b1 = rings[1] + j1;
+          ID.push(a0, a1, b0, a1, b1, b0);
+        }
+        for (const [ring, sign] of [[rings[0], -1], [rings[1], 1]]) {
+          const Tc = scale(T, sign);
+          copyFrom(ring);
+          curPhys = [curPhys[0], 0, 0, 0];
+          const centre = pushV([CT[3 * ring], CT[3 * ring + 1], CT[3 * ring + 2]], Tc, [SU[4 * ring], 0, 0, 2], [seg.chainIndex, resIdx, 0, 0], T);
+          const base = P.length / 3;
+          for (let j = 0; j < segs; j++) {
+            const vi = ring + j;
+            copyFrom(vi);
+            pushV([P[3 * vi], P[3 * vi + 1], P[3 * vi + 2]], Tc, [SU[4 * vi], SU[4 * vi + 1], SU[4 * vi + 2], 2], [seg.chainIndex, resIdx, 0, 0], T);
+          }
+          for (let j = 0; j < segs; j++) {
+            const j1 = (j + 1) % segs;
+            if (sign > 0) ID.push(centre, base + j, base + j1);
+            else ID.push(centre, base + j1, base + j);
+          }
+        }
       }
     }
   }

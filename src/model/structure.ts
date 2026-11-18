@@ -2,6 +2,7 @@ import { RawStructure, StructureParseError } from '../io/types';
 import { assignSecondaryStructure, SSSource } from './ss';
 
 export type SS = 'H' | 'E' | 'C';
+export type ResidueKind = 'protein' | 'nucleic';
 
 export interface Residue {
   readonly index: number;
@@ -10,8 +11,11 @@ export interface Residue {
   readonly resSeq: number;
   readonly iCode: string;
   readonly name: string;
+  /** 'protein' (amino acid) or 'nucleic' (DNA / RNA nucleotide). */
+  readonly kind: ResidueKind;
   /** Atom indices (-1 if absent). */
   readonly n: number;
+  /** The trace atom the cartoon runs through: CA for amino acids; P (else O5', C4') for nucleotides. */
   readonly ca: number;
   readonly c: number;
   readonly o: number;
@@ -38,11 +42,11 @@ export interface Structure {
   readonly atomNames: readonly string[];
   readonly atomElements: readonly string[];
   readonly atomAltLocs: readonly string[];
-  /** Protein residues (polymer residues with a CA), in file order. */
+  /** Polymer residues in file order: amino acids (with a CA) and nucleotides (with a backbone trace atom). */
   readonly residues: readonly Residue[];
   readonly chains: readonly Chain[];
   readonly ssSource: SSSource;
-  /** True when the protein has CA atoms only (no N/C/O backbone). */
+  /** True when the protein part has CA atoms only (no N/C/O backbone). */
   readonly caOnly: boolean;
   readonly notes: readonly string[];
 }
@@ -50,6 +54,10 @@ export interface Structure {
 const AMINO = new Set(
   'ALA ARG ASN ASP CYS GLN GLU GLY HIS ILE LEU LYS MET PHE PRO SER THR TRP TYR VAL SEC PYL MSE ASX GLX UNK HYP MLY SEP TPO PTR CSO CME KCX LLP'.split(' '),
 );
+
+const NUCLEIC = new Set('A C G U T I N DA DC DG DT DU DI DN'.split(' '));
+/** Longest distance (Å) between the trace atoms of two linked nucleotides. */
+export const NUCLEIC_LINK = 8.5;
 
 export interface BuildOptions {
   /** 'auto' (file records when present, else computed), 'file', or 'computed'. */
@@ -90,13 +98,13 @@ export function buildStructure(raw: RawStructure, opts: BuildOptions = {}): Stru
   });
 
   // --- residues ---
-  type Proto = { chainId: string; resSeq: number; iCode: string; name: string; n: number; ca: number; c: number; o: number; atom: boolean; first: number; last: number };
+  type Proto = { chainId: string; resSeq: number; iCode: string; name: string; n: number; ca: number; c: number; o: number; atom: boolean; first: number; last: number; p: number; o5: number; c4: number; c1: number; kind?: ResidueKind };
   const protos: Proto[] = [];
   let cur: Proto | null = null;
   keep.forEach((ai, k) => {
     const a = raw.atoms[ai];
     if (!cur || cur.chainId !== a.chainId || cur.resSeq !== a.resSeq || cur.iCode !== a.iCode || cur.name !== a.resName) {
-      cur = { chainId: a.chainId, resSeq: a.resSeq, iCode: a.iCode, name: a.resName, n: -1, ca: -1, c: -1, o: -1, atom: a.record === 'ATOM', first: k, last: k };
+      cur = { chainId: a.chainId, resSeq: a.resSeq, iCode: a.iCode, name: a.resName, n: -1, ca: -1, c: -1, o: -1, atom: a.record === 'ATOM', first: k, last: k, p: -1, o5: -1, c4: -1, c1: -1 };
       protos.push(cur);
     }
     cur.last = k;
@@ -104,29 +112,63 @@ export function buildStructure(raw: RawStructure, opts: BuildOptions = {}): Stru
     else if (a.name === 'CA' && cur.ca < 0 && a.element !== 'CA') cur.ca = k;
     else if (a.name === 'C' && cur.c < 0) cur.c = k;
     else if ((a.name === 'O' || a.name === 'OT1') && cur.o < 0) cur.o = k;
+    else if (a.name === 'P' && cur.p < 0) cur.p = k;
+    else {
+      const nm = a.name.replace('*', "'");   // old files write C4* for C4'
+      if (nm === "O5'" && cur.o5 < 0) cur.o5 = k;
+      else if (nm === "C4'" && cur.c4 < 0) cur.c4 = k;
+      else if (nm === "C1'" && cur.c1 < 0) cur.c1 = k;
+    }
   });
-  const protein = protos.filter((p) => p.ca >= 0 && (AMINO.has(p.name) || (p.atom && p.n >= 0 && p.c >= 0)));
-  if (protein.length === 0) throw new StructureParseError('No protein residues (with CA atoms) found.');
+  const dist = (a: number, b: number) => Math.hypot(coords[3 * a] - coords[3 * b], coords[3 * a + 1] - coords[3 * b + 1], coords[3 * a + 2] - coords[3 * b + 2]);
+  for (const p of protos) {
+    if (p.ca >= 0 && (AMINO.has(p.name) || (p.atom && p.n >= 0 && p.c >= 0))) p.kind = 'protein';
+    else if (p.ca < 0 && (NUCLEIC.has(p.name) || (p.c1 >= 0 && p.c4 >= 0))) {
+      const trace = p.p >= 0 ? p.p : p.o5 >= 0 ? p.o5 : p.c4;
+      if (trace >= 0) {
+        p.kind = 'nucleic';
+        p.ca = trace;
+      }
+    }
+  }
+  // a nucleotide that is not part of a strand (ATP, a cofactor, a free nucleoside) is a ligand, not a polymer residue
+  const nucleic = protos.filter((p) => p.kind === 'nucleic');
+  nucleic.forEach((p, i) => {
+    const linked = (q?: Proto) => !!q && q.chainId === p.chainId && dist(p.ca, q.ca) < NUCLEIC_LINK;
+    if (!linked(nucleic[i - 1]) && !linked(nucleic[i + 1])) p.kind = undefined;
+  });
+  const protein = protos.filter((p) => p.kind !== undefined);
+  if (protein.length === 0) throw new StructureParseError('No protein or nucleic acid residues found.');
 
   const chains: Chain[] = [];
   const chainIndexOf: number[] = [];
   protein.forEach((p, i) => {
     const last = chains[chains.length - 1];
-    if (!last || last.id !== p.chainId || protein[i - 1].chainId !== p.chainId) {
+    if (!last || last.id !== p.chainId || protein[i - 1].chainId !== p.chainId || protein[i - 1].kind !== p.kind) {
       if (last) (last as { residueEnd: number }).residueEnd = i;
       chains.push({ index: chains.length, id: p.chainId, residueStart: i, residueEnd: protein.length });
     }
     chainIndexOf.push(chains.length - 1);
   });
 
-  const withBackbone = protein.filter((p) => p.n >= 0 && p.c >= 0 && p.o >= 0).length;
-  const caOnly = withBackbone < protein.length * 0.5;
+  const amino = protein.map((p, i) => (p.kind === 'protein' ? i : -1)).filter((i) => i >= 0);
+  const withBackbone = amino.filter((i) => protein[i].n >= 0 && protein[i].c >= 0 && protein[i].o >= 0).length;
+  const caOnly = amino.length > 0 && withBackbone < amino.length * 0.5;
+  const nNucleic = protein.length - amino.length;
+  if (nNucleic) notes.push(`${nNucleic} nucleotide(s): the backbone is drawn through the phosphorus atoms, each base as a slab from the backbone to its N1 (purine) or N3 (pyrimidine) atom.`);
   if (caOnly) notes.push('CA-only (or mostly CA-only) structure: ribbon orientation and secondary structure are inferred from CA geometry.');
 
   // --- secondary structure ---
   const ssMode = opts.ss ?? 'auto';
-  const { ss, source, notes: ssNotes } = assignSecondaryStructure(protein, chainIndexOf, coords, raw.ssRanges, ssMode, caOnly);
-  notes.push(...ssNotes);
+  // (amino acids only; nucleotides carry no secondary-structure class)
+  const ss: SS[] = protein.map(() => 'C');
+  let source: SSSource = 'none';
+  if (amino.length) {
+    const r = assignSecondaryStructure(amino.map((i) => protein[i]), amino.map((i) => chainIndexOf[i]), coords, raw.ssRanges, ssMode, caOnly);
+    amino.forEach((i, k) => (ss[i] = r.ss[k]));
+    source = r.source;
+    notes.push(...r.notes);
+  }
 
   const residues: Residue[] = protein.map((p, i) =>
     Object.freeze({
@@ -136,6 +178,7 @@ export function buildStructure(raw: RawStructure, opts: BuildOptions = {}): Stru
       resSeq: p.resSeq,
       iCode: p.iCode,
       name: p.name,
+      kind: p.kind!,
       n: p.n,
       ca: p.ca,
       c: p.c,

@@ -2,11 +2,11 @@
 
 **Website: https://martin-steinegger.github.io/molart/**
 
-Artist-inspired renderings of real protein structures, in the browser.
+Artist-inspired renderings of real protein, DNA and RNA structures, in the browser.
 
 <img src="docs/molart.gif" alt="molart drawing the same protein in many styles" width="360">
 
-molart loads a PDB or mmCIF file, draws the usual protein cartoon, and then redraws the same structure in 21 styles.
+molart loads a PDB or mmCIF file, draws the usual cartoon, and then redraws the same structure in 21 styles.
 
 ## Inspired by great artists
 
@@ -24,6 +24,8 @@ Further styles: glass, frosted, cartoon, surface and ASCII.
 - **Science | Art.** Science mode keeps the ribbon geometry; art mode (opt-in, labelled) lets a
   style reshape the drawn ribbon.
 - **Per chain.** Each chain can have its own style and mode.
+- **DNA and RNA.** Nucleic acids are drawn as a backbone band through the phosphates with a slab
+  for every base, alone or next to protein. Art mode does not reshape them.
 - **Local.** Files you open stay in your browser. Fetching by PDB ID is an explicit button and
   goes to files.rcsb.org.
 - **Export.** White-background PNG up to 4K.
@@ -59,7 +61,7 @@ node cli/molart.mjs styles
   [LinkedIn post](https://www.linkedin.com/feed/update/urn:li:activity:7526936072279212032/) by Latent Labs.
 - The ASCII style is inspired by [ascii-fold](https://github.com/mitsenkov/ascii-fold) by
   Maxim Tsenkov.
-- Sample structures in `public/samples/` (1TIM, 3CHY, 1UBQ, 4HHB) are unmodified downloads from
+- Sample structures in `public/samples/` (1TIM, 3CHY, 1UBQ, 4HHB, 1BNA, 1EHZ, 1AAY) are unmodified downloads from
   the [RCSB PDB](https://www.rcsb.org) (CC0 1.0).
 
 ## License
