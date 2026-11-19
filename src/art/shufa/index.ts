@@ -49,7 +49,7 @@ function hand(k: Hand): ArtStyle {
     paper: { color: [0.957, 0.933, 0.875], fibre: 0.8, seal: '蛋白', sealColor: [0.72, 0.13, 0.1], font: k.font },
     art: {
       note: 'written flat on the paper in one breath: each strand is a pressed stroke lifted to a point, each helix an undulating sweep, and the loops between them curl into the rings and threads that link cursive characters.',
-      ribbon: { smooth: { helix: 2, strand: 2, coil: 2 }, face: 'all', curl: { radius: 3.6, turns: 1 }, runs: true, outline: { helix: { kind: 'brush', amount: 0.45 }, strand: { kind: 'brush', amount: 1.0 }, coil: { kind: 'brush', amount: 0.5, min: k.coil * 0.26 } }, helixWidth: k.helix[0] * 1.3, strandWidth: k.strand[0] * 1.3, coilWidth: k.coil, coilThickness: k.coil * 0.5 },
+      ribbon: { smooth: { helix: 5, strand: 2, coil: 3 }, face: 'all', curl: { radius: 3.2, turns: 1 }, runs: true, outline: { helix: { kind: 'brush', amount: 0.45 }, strand: { kind: 'brush', amount: 1.0 }, coil: { kind: 'brush', amount: 0.5, min: k.coil * 0.26 } }, helixWidth: k.helix[0] * 1.3, strandWidth: k.strand[0] * 1.3, coilWidth: k.coil, coilThickness: k.coil * 0.5 },
     },
     surfaceGLSL: /* glsl */ `
 vec3 shadeSurface(Surface s){
