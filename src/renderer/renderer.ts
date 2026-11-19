@@ -10,6 +10,7 @@ import { buildSurface } from '../geometry/surface';
 import { principalFrame, ViewFrame } from '../geometry/frame';
 import type { ArtStyle } from '../art/types';
 import { buildGlyphAtlas, GLYPH_ASPECT, GLYPH_RANGE } from '../art/asciifold/glyphs';
+import { brushFontReady, mount, type Colophon } from '../art/paper';
 import { ASCII_FRAG, COMPOSITE_FRAG, DEPTH_FRAG, DOWNSAMPLE_FRAG, FULLSCREEN_VERT, GBUFFER_VERT, gbufferFrag } from './shaders';
 
 export const RENDERER_VERSION = '0.1.0';
@@ -101,6 +102,8 @@ export class MolartRenderer {
   structure: Structure | null = null;
   frame: ViewFrame | null = null;
   style: ArtStyle | null = null;
+  /** Colophon for styles mounted on paper (seal text, inscription); null = export the bare picture on white. */
+  colophon: Colophon | null = { seal: '', inscription: '' };
   params: RenderParams = { seed: 1, deform: 0 };
   /** Debug/tuning: partial ink parameter override applied on top of the style. */
   inkOverride: Partial<import('../art/types').InkParams> = {};
@@ -994,6 +997,9 @@ export class MolartRenderer {
     c.height = height;
     const ctx = c.getContext('2d', { alpha: false })!;
     ctx.putImageData(new ImageData(px as unknown as Uint8ClampedArray<ArrayBuffer>, width, height), 0, 0);
+    const paper = this.style?.paper;
+    if (paper && this.colophon) await brushFontReady(paper.font, (this.colophon.seal || paper.seal) + this.colophon.inscription);
+    if (paper && this.colophon) mount(ctx, width, height, paper, { seal: this.colophon.seal || paper.seal, inscription: this.colophon.inscription }, this.params.seed ?? 0);
     return await new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('PNG encoding failed'))), 'image/png'));
   }
 }

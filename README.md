@@ -6,7 +6,7 @@ Artist-inspired renderings of real protein, DNA and RNA structures, in the brows
 
 <img src="docs/molart.gif" alt="molart drawing the same protein in many styles" width="360">
 
-molart loads a PDB or mmCIF file, draws the usual cartoon, and then redraws the same structure in 21 styles.
+molart loads a PDB or mmCIF file, draws the usual cartoon, and then redraws the same structure in 21 styles, plus Shufa (Chinese calligraphy) in this fork.
 
 ## Inspired by great artists
 
@@ -17,6 +17,33 @@ Henri Matisse, Piet Mondrian and Leonardo da Vinci, and the sumi-e ink tradition
 The styles are a tribute, not the artists' work: each is our own reimagination, drawn by code.
 
 Further styles: glass, frosted, cartoon, surface and ASCII.
+
+## Shufa 書法 (this fork)
+
+Chinese calligraphy: the chain is one brush line written in a single breath. Strands are pressed, broad strokes
+that lift to a point, helices are written at middle weight, loops are the gossamer threads between strokes. The
+brush is dipped, writes until it runs dry and is dipped again, so the ink goes from wet black to flying white
+along the chain; where strokes cross, a hair of paper is left. The picture is mounted on xuan paper with an
+inscription column and a cinnabar seal.
+
+<img src="docs/shufa-hands.jpg" alt="The designed luciferase LuxSit-i in the four Shufa hands: running, thick, slender and dry brush" width="720">
+
+It comes in four hands, chosen with the **Hand** selector or by style id:
+
+| Hand | Style id | Line | Lettering |
+|---|---|---|---|
+| Running 行草 | `shufa` | middle weight, some flying white | Zhi Mang Xing |
+| Thick 顏楷 | `shufa-yan` | full, heavy, wet | Ma Shan Zheng |
+| Slender 瘦金 | `shufa-shoujin` | thin, taut, even black | Long Cang |
+| Dry brush 狂草 | `shufa-kuangcao` | broad against hair-fine, frayed into flying white | Liu Jian Mao Cao |
+
+```sh
+node cli/molart.mjs render public/samples/1UBQ.cif --style shufa-kuangcao --seal 泛素 --inscription 一笔书 --output ubq.png
+node cli/molart.mjs render public/samples/1UBQ.cif --style shufa --plain --output ubq-plain.png   # bare picture on white
+```
+
+The seal takes one to four characters (default 蛋白, "protein"), the inscription up to sixteen. The four faces
+cover simplified characters; others fall back to a system face.
 
 ## Features
 
@@ -61,6 +88,8 @@ node cli/molart.mjs styles
   [LinkedIn post](https://www.linkedin.com/feed/update/urn:li:activity:7526936072279212032/) by Latent Labs.
 - The ASCII style is inspired by [ascii-fold](https://github.com/mitsenkov/ascii-fold) by
   Maxim Tsenkov.
+- The Shufa lettering uses Zhi Mang Xing, Ma Shan Zheng, Long Cang and Liu Jian Mao Cao from
+  [Google Fonts](https://github.com/google/fonts), SIL Open Font License 1.1 (licences in `public/fonts/`).
 - Sample structures in `public/samples/` (1TIM, 3CHY, 1UBQ, 4HHB, 1BNA, 1EHZ, 1AAY) are unmodified downloads from
   the [RCSB PDB](https://www.rcsb.org) (CC0 1.0).
 

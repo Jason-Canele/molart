@@ -1,6 +1,7 @@
 import { loadStructure } from '../io/load';
 import { coordinateFingerprint, Structure } from '../model/structure';
 import { allStyles, getStyle } from '../art/registry';
+import { brushFontReady, mount } from '../art/paper';
 import { CameraState, MolartRenderer, RENDERER_VERSION } from '../renderer/renderer';
 
 const SAMPLES = [
@@ -32,6 +33,10 @@ interface Settings {
   artMode?: boolean;
   /** ASCII Fold: share of the picture drawn as text (0..1). */
   asciiAmount?: number;
+  /** styles mounted on paper: seal characters, inscription line, and whether the sheet is drawn at all */
+  seal?: string;
+  inscription?: string;
+  sheet?: boolean;
   /** key light: degrees turned from the default direction, and its colour (hex) */
   light?: { angle: number; color: string };
 }
@@ -146,17 +151,23 @@ export class App {
     this.settings.asciiAmount = num(this.settings.asciiAmount, 0.5, 0, 1);
 
     const canvas = h('canvas', { id: 'view', tabindex: '0', 'aria-label': 'Structure view. Drag to rotate, scroll to zoom, right-drag to pan.' }) as HTMLCanvasElement;
-    const main = h('main', {}, canvas, h('div', { class: 'drop hidden', id: 'drop' }, 'Drop a .pdb / .cif / .mmcif file'));
+    // the sheet (paper, inscription, seal) of mounted styles lies over the view by multiplication
+    this.sheet = h('canvas', { id: 'sheet', class: 'hidden', 'aria-hidden': 'true' }) as HTMLCanvasElement;
+    const main = h('main', {}, canvas, this.sheet, h('div', { class: 'drop hidden', id: 'drop' }, 'Drop a .pdb / .cif / .mmcif file'));
     const ui = this.buildPanel();
     main.append(ui.top, this.els.error);
     root.append(main, ui.dock, ui.scrim, ui.drawer);
     this.r = new MolartRenderer(canvas);
     this.r.style = getStyle(this.settings.style);
+    this.r.colophon = this.colophonParam();
     this.r.params = { seed: this.settings.seed, deform: this.settings.deform, light: this.lightParam() };
     this.r.controls.addEventListener('change', () => this.scheduleCameraSave());
     this.bindDrop(main);
     this.bindKeys(canvas);
-    new ResizeObserver(() => this.r.invalidate()).observe(main);
+    new ResizeObserver(() => {
+      this.r.invalidate();
+      this.drawSheet();
+    }).observe(main);
     this.refreshStyleUI();
     const sample = params.get('sample') ?? (params.has('empty') ? null : '1TIM');
     if (sample) void this.loadSample(sample).then(() => this.safeStartNote && this.showError(this.safeStartNote));
@@ -180,7 +191,7 @@ export class App {
     pdbId.addEventListener('keydown', (e) => e.key === 'Enter' && void this.fetchPdb(pdbId.value));
 
     const styleBtns = h('div', { class: 'styles', role: 'group', 'aria-label': 'Artistic style' });
-    allStyles().forEach((s, i) => {
+    allStyles().filter((s) => !s.family || s.family.of === s.id).forEach((s, i) => {
       const b = h('button', { 'data-style': s.id, 'aria-pressed': 'false', title: i < 10 ? `${s.label} (key ${i === 9 ? 0 : i + 1})` : s.label }, s.label);
       b.addEventListener('click', () => this.chooseStyle(s.id));
       styleBtns.append(b);
@@ -225,6 +236,20 @@ export class App {
     const asciiOut = h('span', { class: 'note' }, '');
     ascii.addEventListener('input', () => this.setAsciiAmount(parseFloat(ascii.value)));
     const asciiBox = h('section', { class: 'ctl hidden' }, h('label', {}, 'Text'), ascii, asciiOut);
+    // mounted styles: seal characters, an inscription line, and the sheet on or off
+    const seal = h('input', { type: 'text', id: 'sealText', maxlength: '4', size: '5', value: this.settings.seal ?? '', 'aria-label': 'Seal characters (up to four)' }) as HTMLInputElement;
+    const inscription = h('input', { type: 'text', id: 'inscriptionText', maxlength: '16', size: '12', value: this.settings.inscription ?? '', placeholder: 'none', 'aria-label': 'Inscription written beside the picture' }) as HTMLInputElement;
+    const sheetOn = h('input', { type: 'checkbox', id: 'sheetToggle' }) as HTMLInputElement;
+    sheetOn.checked = this.settings.sheet !== false;
+    const colophonChange = () => this.setColophon({ seal: seal.value, inscription: inscription.value, sheet: sheetOn.checked });
+    seal.addEventListener('input', colophonChange);
+    inscription.addEventListener('input', colophonChange);
+    sheetOn.addEventListener('change', colophonChange);
+    // styles that come in several hands (Shufa): choose the hand
+    const handSel = h('select', { id: 'handSelect', 'aria-label': 'Hand' }) as HTMLSelectElement;
+    handSel.addEventListener('change', () => this.chooseStyle(handSel.value));
+    const handBox = h('section', { class: 'ctl hidden' }, h('label', {}, 'Hand'), handSel);
+    const sheetBox = h('section', { class: 'ctl hidden' }, h('label', { class: 'check' }, sheetOn, ' Paper'), h('label', {}, 'Seal'), seal, h('label', {}, 'Inscription'), inscription);
     const art = h('input', { type: 'checkbox', id: 'artToggle', class: 'hidden', tabindex: '-1', 'aria-hidden': 'true' }) as HTMLInputElement;
     art.checked = !!this.settings.artMode;
     art.addEventListener('change', () => this.setArtMode(art.checked));
@@ -235,7 +260,7 @@ export class App {
     modeArt.addEventListener('click', () => this.chooseMode(true));
     const artBox = h('div', { class: 'mode', role: 'group', 'aria-label': 'Mode' }, modeSci, modeArt, art);
     const artWarn = h('span', { class: 'warn hidden', id: 'artWarn', title: 'Art mode: shapes are an interpretation and no longer follow the true backbone. Atomic coordinates are unchanged.' }, 'Shape altered for art');
-    Object.assign(els, { facesBox, faces, asciiBox, ascii, asciiOut, artBox, art, modeSci, modeArt });
+    Object.assign(els, { facesBox, faces, asciiBox, ascii, asciiOut, artBox, art, modeSci, modeArt, sheetBox, seal, inscription, sheetOn, handBox, handSel });
     // per-chain styles (shown for structures with more than one chain)
     // what the style row applies to: everything, or one chain (shown for structures with more than one chain)
     els.chainBox = h('div', { class: 'mode targets hidden', role: 'group', 'aria-label': 'Apply the style to' });
@@ -320,7 +345,7 @@ export class App {
     const dock = h(
       'footer',
       { class: 'dock' },
-      h('div', { class: 'context' }, deformBox, colorBox, facesBox, asciiBox),
+      h('div', { class: 'context' }, deformBox, colorBox, facesBox, asciiBox, handBox, sheetBox),
       styleBtns,
       // bottom row: Science | Art, what the style applies to, and a short label while the picture is an interpretation
       h('div', { class: 'bar' }, artBox, els.chainBox, artWarn, deformWarn),
@@ -335,7 +360,7 @@ export class App {
     const shownStyle = this.target ? assigned[this.target] ?? st.id : Object.keys(assigned).length ? '' : st.id;
     const row = this.els.styleBtns;
     row.querySelectorAll('button').forEach((b) => {
-      const on = b.dataset.style === shownStyle;
+      const on = b.dataset.style === (shownStyle && (getStyle(shownStyle).family?.of ?? shownStyle));
       b.setAttribute('aria-pressed', String(on));
       // keep the chosen style in view inside its own row (never scrolls the page)
       if (on && row.clientWidth > 0) row.scrollLeft = Math.max(0, b.offsetLeft - row.offsetLeft - (row.clientWidth - b.offsetWidth) / 2);
@@ -368,6 +393,17 @@ export class App {
     document.getElementById('artWarn')?.classList.toggle('hidden', !anyArt);
     (this.els.faces as HTMLInputElement).checked = this.settings.faces !== false;
     this.els.asciiBox.classList.toggle('hidden', !used.some((x) => x.ascii));
+    this.els.sheetBox.classList.toggle('hidden', !st.paper);
+    const shown = shownStyle ? getStyle(shownStyle) : st;
+    const hands = shown.family ? allStyles().filter((x) => x.family?.of === shown.family!.of) : [];
+    this.els.handBox.classList.toggle('hidden', hands.length < 2);
+    const sel = this.els.handSel as HTMLSelectElement;
+    if (hands.length > 1) {
+      sel.replaceChildren(...hands.map((x) => h('option', { value: x.id }, x.family!.name)));
+      sel.value = shown.id;
+    }
+    if (st.paper) (this.els.seal as HTMLInputElement).placeholder = st.paper.seal;
+    this.drawSheet();
     const amt = this.settings.asciiAmount ?? 0.5;
     (this.els.ascii as HTMLInputElement).value = String(amt);
     this.els.asciiOut.textContent = amt <= 0 ? 'ribbon only' : amt >= 1 ? 'text only' : `${Math.round(amt * 100)}% towards text`;
@@ -622,6 +658,44 @@ export class App {
   }
 
   /** ASCII Fold: share of the picture drawn as text, 0 (ribbon only) .. 1 (text only). */
+  private sheet!: HTMLCanvasElement;
+  private colophonParam() {
+    return this.settings.sheet === false ? null : { seal: this.settings.seal ?? '', inscription: this.settings.inscription ?? '' };
+  }
+  /** Mounted styles: seal characters (empty = the style's own), inscription line, and the sheet on or off. */
+  setColophon(c: { seal?: string; inscription?: string; sheet?: boolean }) {
+    if (c.seal !== undefined) this.settings.seal = Array.from(c.seal.trim()).slice(0, 4).join('');
+    if (c.inscription !== undefined) this.settings.inscription = Array.from(c.inscription.trim()).slice(0, 16).join('');
+    if (c.sheet !== undefined) this.settings.sheet = c.sheet;
+    this.r.colophon = this.colophonParam();
+    (this.els.seal as HTMLInputElement).value = this.settings.seal ?? '';
+    (this.els.inscription as HTMLInputElement).value = this.settings.inscription ?? '';
+    (this.els.sheetOn as HTMLInputElement).checked = this.settings.sheet !== false;
+    this.drawSheet();
+    this.saveSettings();
+  }
+  /** The view's copy of the sheet: paper, inscription and seal, laid over the picture by multiplication. */
+  private drawSheet() {
+    const paper = getStyle(this.settings.style).paper, c = this.sheet, col = this.colophonParam();
+    if (!c) return;
+    c.classList.toggle('hidden', !paper || !col);
+    if (!paper || !col) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2), w = Math.round(c.clientWidth * dpr), h = Math.round(c.clientHeight * dpr);
+    if (!w || !h) return;
+    const text = { seal: col.seal || paper.seal, inscription: col.inscription };
+    const draw = () => {
+      c.width = w;
+      c.height = h;
+      const g = c.getContext('2d')!;
+      g.fillStyle = '#fff';
+      g.fillRect(0, 0, w, h);
+      mount(g, w, h, paper, text, this.settings.seed);
+    };
+    draw();
+    // the brush face may still be loading: draw again once it is there
+    if (!document.fonts.check(`40px "${paper.font}"`, text.seal + text.inscription)) void brushFontReady(paper.font, text.seal + text.inscription).then(() => getStyle(this.settings.style).paper === paper && draw());
+  }
+
   setAsciiAmount(v: number) {
     this.settings.asciiAmount = Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0.5));
     this.r.setParams({ ascii: this.settings.asciiAmount });

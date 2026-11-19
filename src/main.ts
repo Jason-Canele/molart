@@ -32,6 +32,8 @@ const api = {
   /** Per-chain styles: { chainId: styleId | null }; null clears all. Chains not listed keep the main style. */
   setChainStyles: (m: Record<string, string | null> | null) => app.setChainStyles(m),
   getChainStyles: () => app.r.getChainStyles(),
+  /** Mounted styles (Shufa): seal characters, inscription line, sheet on or off. */
+  setColophon: (c: { seal?: string; inscription?: string; sheet?: boolean }) => app.setColophon(c),
   /** Cartoon: faces, heads and arms on or off. */
   setFaces: (on: boolean) => app.setFaces(on),
   setArtMode: (on: boolean) => app.setArtMode(on),

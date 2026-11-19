@@ -18,12 +18,18 @@
   color: var(--ink);
   color-scheme: light;
 }
+@font-face { font-family: "Ma Shan Zheng"; src: url("/fonts/MaShanZheng-Regular.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Zhi Mang Xing"; src: url("/fonts/ZhiMangXing-Regular.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Long Cang"; src: url("/fonts/LongCang-Regular.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Liu Jian Mao Cao"; src: url("/fonts/LiuJianMaoCao-Regular.woff2") format("woff2"); font-display: swap; }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body { background: var(--paper); color: var(--ink); -webkit-font-smoothing: antialiased; }
 #app { display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100%; }
 main { position: relative; overflow: hidden; background: var(--paper); min-width: 0; min-height: 0; }
 canvas#view { width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+canvas#sheet { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: multiply; }
+canvas#sheet.hidden { display: none; }
 h1 { font-size: 15px; letter-spacing: -0.01em; margin: 0; font-weight: 600; }
 h2 { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin: 0; font-weight: 500; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

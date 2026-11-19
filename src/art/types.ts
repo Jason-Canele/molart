@@ -86,6 +86,10 @@ export interface ArtStyle {
     /** deformable styles: amount of the style's deformation that art mode applies when its slider is at 0 */
     deform?: number;
   };
+  /** One hand (variant) of a family of styles: the style row shows the family once (the member whose id is `of`), a selector offers its hands by `name`. */
+  family?: { of: string; name: string };
+  /** The sheet the picture is mounted on (tone, fibres) with its colophon: an inscription column and a seal. Exports and the view show it; the protein is not changed. */
+  paper?: import('./paper').PaperOptions;
   /** True when the style offers the opt-in artistic deformation slider. */
   deformable?: boolean;
   /** Name of the deformation in the UI (default: Melt). */

@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { extname, join, resolve } from 'node:path';
 import { chromium } from 'playwright-core';
 
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.cif': 'text/plain', '.pdb': 'text/plain', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.cif': 'text/plain', '.pdb': 'text/plain', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.woff2': 'font/woff2' };
 
 /** Minimal static file server for the built app (dist/). Local only. */
 export function serveStatic(root) {

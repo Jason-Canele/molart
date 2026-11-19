@@ -15,6 +15,7 @@ usage:
   molart render  <file.pdb|.cif> --style <id> [--width 2400] [--height 2400] [--seed 42]
                  [--deform 0..1] [--colors '#aaaaaa,#bbbbbb'] [--camera cam.json] [--chains A,B]
                  [--chain-styles A=glass,B=klimt] [--no-faces] [--ascii 0..1] [--art]
+                 [--seal 蛋白] [--inscription 一笔书] [--plain]
                  [--output out.png]
   molart gallery <file.pdb|.cif> [--styles normal,schiele,picasso,klimt,vangogh,dali]
                  [--size 1024] [--seed 42] [--deform 0..1] [--camera cam.json] [--chains A]
@@ -27,6 +28,9 @@ options:
   --chains     frame the camera on these chains (all chains are still drawn).
   --chain-styles  give chains their own style (chain id = style id); other chains use --style.
   --no-faces   Cartoon style: plain ribbons without faces, heads and arms.
+  --seal       Shufa: one to four characters cut into the seal (default 蛋白).
+  --inscription  Shufa: a short line written downwards beside the picture (default none).
+  --plain      Shufa: the bare picture on white, without paper, inscription and seal.
   --art        Art mode: styles that define one draw simplified or reshaped forms instead of the true ribbon.
   --ascii      ASCII Fold style: share of the picture drawn as text, 0 (ribbon only) .. 1 (text only); default 0.5.
   --colors     two hex colours for styles with a colour choice (glass): helices/strands, loops/edges.
@@ -36,7 +40,7 @@ options:
 function parseChainStyles(v) {
   const out = {};
   for (const part of String(v).split(',')) {
-    const m = /^([^=]+)=([a-z0-9]+)$/i.exec(part.trim());
+    const m = /^([^=]+)=([a-z0-9-]+)$/i.exec(part.trim());
     if (!m) throw new Error(`--chain-styles expects chain=style pairs, e.g. --chain-styles A=glass,B=klimt (got "${v}")`);
     out[m[1]] = m[2];
   }
@@ -90,6 +94,7 @@ async function prepare(page, args, file) {
     window.molart.setDeform(deform);
   }, [parseInt(args.seed ?? '42', 10), parseFloat(args.deform ?? '0')]);
   if (args['no-faces']) await page.evaluate(() => window.molart.setFaces(false));
+  await page.evaluate((c) => window.molart.setColophon(c), { seal: args.seal && args.seal !== 'true' ? args.seal : '', inscription: args.inscription && args.inscription !== 'true' ? args.inscription : '', sheet: !args.plain });
   await page.evaluate((on) => window.molart.setArtMode(on), !!args.art);
   if (args.ascii !== undefined) {
     const v = parseFloat(args.ascii);
