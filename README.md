@@ -18,6 +18,16 @@ The styles are a tribute, not the artists' work: each is our own reimagination, 
 
 Further styles: glass, frosted, cartoon, surface and ASCII.
 
+## Canele styles (this fork)
+
+Besides Shufa (below), three styles drawn from Canele's own work:
+
+| Style | id | Look |
+|---|---|---|
+| Balloon | `balloon` | mirror-polished balloons, after the balloon figures sampled with oracle-diff: in art mode each helix and strand is one fat balloon pinched at both ends, the loops are the twists between them |
+| Assembly | `assembly` | cut-paper pieces: each helix and strand its own matte colour from the source palette of the oracle-diff paper, loops grey; art mode cuts the pieces apart and lays them flat |
+| Plate | `plate` | a copperplate engraving in olive ink: bare paper ribbons modelled by ruled lines that swell in the shade |
+
 ## Shufa 書法 (this fork)
 
 Chinese calligraphy: the chain is one brush line written in a single breath. Strands are pressed, broad strokes
